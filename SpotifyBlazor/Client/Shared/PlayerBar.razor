@@ -1,0 +1,150 @@
+﻿@using SpotifyBlazor.Shared.Models
+@using SpotifyBlazor.Client.Services
+@inject SpotifyAuthService Auth
+
+<div class="playerbar d-flex align-items-center gap-3 px-3 py-2">
+
+    @if (nowPlaying?.Item != null)
+    {
+        <img src="@nowPlaying.Item.Album.Images.FirstOrDefault()?.Url"
+             class="playerbar-art" />
+
+        <div class="d-flex flex-column">
+            <strong>@nowPlaying.Item.Name</strong>
+            <span>@string.Join(", ", nowPlaying.Item.Artists.Select(a => a.Name))</span>
+        </div>
+
+        <div class="player-controls-wrapper d-flex flex-column align-items-center">
+
+            <div class="player-controls d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-dark" @onclick="PrevTrack">⏮</button>
+                <button class="btn btn-sm btn-dark" @onclick="TogglePlayPause">
+                    @(nowPlaying?.IsPlaying == true ? "⏸" : "▶️")
+                </button>
+                <button class="btn btn-sm btn-dark" @onclick="NextTrack">⏭</button>
+            </div>
+
+            <div class="progress-container w-100 mt-2">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" style="width:@ProgressPercent%;"></div>
+                </div>
+
+                <div class="d-flex justify-content-between text-light small mt-1 w-100">
+                    <span>@FormatTime(nowPlaying.ProgressMs)</span>
+                    <span>@FormatTime(nowPlaying.Item.DurationMs)</span>
+                </div>
+            </div>
+
+        </div>
+    }
+    else
+    {
+        <span>No music playing</span>
+    }
+
+</div>
+
+
+@code {
+    private SpotifyNowPlaying? nowPlaying;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(Auth.AccessToken))
+        {
+            //nowPlaying = await Auth.GetNowPlayingAsync();
+            await LoadNowPlaying();
+            _ = RefreshLoop();
+        }
+
+        Auth.OnPlaybackChanged += async () =>
+        {
+            await LoadNowPlaying();
+            StateHasChanged();
+        };
+    }
+
+    
+    private double ProgressPercent => nowPlaying == null || nowPlaying.Item == null
+        ? 0
+        : (double)nowPlaying.ProgressMs / nowPlaying.Item.DurationMs * 100;
+    
+
+    private async Task RefreshLoop()
+    {
+        int apiRefreshCounter = 0;
+
+        while (true)
+        {
+            await Task.Delay(1000); // UI updates every second
+
+            // Every 10 seconds, refresh from Spotify API
+            apiRefreshCounter++;
+            if (apiRefreshCounter >= 10)
+            {
+                apiRefreshCounter = 0;
+                await LoadNowPlaying();
+            }
+            else if (nowPlaying?.IsPlaying == true)
+            {
+                // Locally advance progress
+                nowPlaying.ProgressMs += 1000;
+
+
+                // Clamp to duration
+                //if (nowPlaying.ProgressMs > nowPlaying.Item.DurationMs)
+                    //nowPlaying.ProgressMs = nowPlaying.Item.DurationMs;
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadNowPlaying()
+    {
+        nowPlaying = await Auth.GetNowPlayingAsync();
+    }
+
+    private string FormatTime(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+
+    private async Task NextTrack()
+    {
+        await Auth.SkipToNextAsync();
+
+        // Wait for Spotify to update the now playing info
+        await Task.Delay(300);
+
+        // Retry a few times until the new track is available
+        for (int i = 0; i < 5; i++)
+        {
+            await LoadNowPlaying();
+
+            if (nowPlaying?.IsPlaying == true)
+                break;
+
+            await Task.Delay(200);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task PrevTrack()
+    {
+        await Auth.SkipToPreviousAsync();
+        await LoadNowPlaying();
+    }
+
+    private async Task TogglePlayPause()
+    {
+        if (nowPlaying?.IsPlaying == true)
+            await Auth.PauseAsync();
+        else
+            await Auth.PlayAsync();
+
+        await LoadNowPlaying();
+    }
+}

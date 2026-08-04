@@ -1,0 +1,68 @@
+﻿@inherits LayoutComponentBase
+@inject ConfigService Config
+@inject SpotifyAuthService Auth
+@inject NavigationManager Navigation
+@using SpotifyBlazor.Shared.Models
+@using SpotifyBlazor.Client.Services
+
+<div class="loginheader">
+
+        @if (Config.IsLoaded && string.IsNullOrEmpty(Auth.AccessToken))
+        {
+            <div class="px-3 py-2">
+                <button class="btn btn-success" @onclick="LoginToSpotify">
+                    Login with Spotify
+                </button>
+            </div>
+        }
+        else if (Config.IsLoaded && !string.IsNullOrEmpty(Auth.AccessToken))
+        {
+            <div class="px-3 py-2 text-success">
+                ✔ Logged in to Spotify 
+                @if (!string.IsNullOrEmpty(Auth.AccessToken))
+                {
+                    <button class="btn btn-danger btn-sm" @onclick="Logout">
+                        Logout
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="px-3 py-2 text-warning">
+                Loading config…
+            </div>
+        }
+
+</div>
+    
+
+@code {
+    protected override void OnInitialized()
+    {
+        Config.OnChange += StateHasChanged;
+    }
+
+    private void LoginToSpotify()
+    {
+        if (string.IsNullOrEmpty(Config.ClientId) || string.IsNullOrEmpty(Config.CallbackUri))
+            return;
+
+        var scopes = "user-read-private user-read-email user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-read-private user-library-read user-library-modify";
+
+        var url =
+            $"https://accounts.spotify.com/authorize" +
+            $"?client_id={Config.ClientId}" +
+            $"&response_type=code" +
+            $"&redirect_uri={Uri.EscapeDataString(Config.CallbackUri)}" +
+            $"&scope={Uri.EscapeDataString(scopes)}";
+
+        Navigation.NavigateTo(url, forceLoad: true);
+    }
+
+    private async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+}

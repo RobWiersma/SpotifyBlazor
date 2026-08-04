@@ -1,0 +1,63 @@
+﻿@page "/spotcallback"
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject NavigationManager Nav
+@inject HttpClient Http
+@inject SpotifyAuthService Auth
+@inject IJSRuntime JS
+
+<h3>Spotify Callback (Debug Mode)</h3>
+
+@if (!string.IsNullOrEmpty(Code))
+{
+    <p><strong>Code received:</strong> @Code</p>
+}
+
+@code {
+    public string? Code { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        Console.WriteLine("Callback URL: " + uri);
+
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        Code = query["code"];
+
+        Console.WriteLine("Extracted Code: " + Code);
+
+        if (string.IsNullOrEmpty(Code))
+        {
+            Console.WriteLine("No code found in callback URL.");
+            return;
+        }
+
+        Console.WriteLine("Sending code to server...");
+        var response = await Http.PostAsJsonAsync("/api/spotify/exchange", new { Code });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine("Token exchange failed.");
+            return;
+        }
+
+        var token = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
+
+        Console.WriteLine("Access Token: " + token?.access_token);
+        Console.WriteLine("Refresh Token: " + token?.refresh_token);
+
+        await Auth.SetInitialTokens(token);
+
+        //await JS.InvokeVoidAsync("localStorage.setItem", "spotify_auth",
+        //    System.Text.Json.JsonSerializer.Serialize(new
+        //    {
+        //        AccessToken = token.access_token,
+        //        RefreshToken = token.refresh_token,
+        //       ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in)
+        //    }));
+
+        // Optional redirect
+        Nav.NavigateTo("/");
+    }
+}

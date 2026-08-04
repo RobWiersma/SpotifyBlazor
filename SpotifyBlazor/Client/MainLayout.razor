@@ -1,0 +1,36 @@
+﻿@inherits LayoutComponentBase
+@inject ConfigService Config
+@inject SpotifyAuthService Auth
+@using SpotifyBlazor.Client.Shared
+@using SpotifyBlazor.Shared.Models
+@using SpotifyBlazor.Client.Layout
+@using SpotifyBlazor.Client.Services
+
+<div class="layout-root">
+
+    <!-- LEFT SIDEBAR (if you have one later) -->
+    <!-- <div class="sidebar">
+        <NavMenu />
+    </div> -->
+    <!-- RIGHT SIDE: vertical column -->
+    <div class="layout-content">
+
+        <!-- MAIN CONTENT -->
+        <div class="content-root d-flex flex-column flex-grow-1">
+
+            <SpotHeader />
+
+            <main class="flex-grow-1">
+                <article class="content px-4">
+                    @Body
+                </article>
+            </main>
+
+        </div>
+
+        <!-- FOOTER PLAYERBAR (must be inside layout-content) -->
+        <PlayerBar />
+
+    </div>
+
+</div>

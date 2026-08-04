@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SpotifyBlazor/Client/SpotifyBlazor.Client.csproj" />
+  <Project Path="SpotifyBlazor/Server/SpotifyBlazor.Server.csproj" />
+  <Project Path="SpotifyBlazor/Shared/SpotifyBlazor.Shared.csproj" />
+</Solution>

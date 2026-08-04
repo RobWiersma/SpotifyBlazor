@@ -1,0 +1,84 @@
+﻿@page "/liked"
+@inject SpotifyAuthService Auth
+@using SpotifyBlazor.Shared.Models
+@using SpotifyBlazor.Client.Services
+
+<h2 class="mb-3">Liked Songs</h2>
+
+@if (liked == null)
+{
+    <p>Loading your liked songs…</p>
+}
+else if (liked.Items.Count == 0)
+{
+    <p>You have no liked songs.</p>
+}
+else
+{
+    <div class="liked-list">
+        @foreach (var item in liked.Items)
+        {
+            <div class="liked-item d-flex align-items-center gap-3 mb-3">
+
+                <img src="@item.Track.Album.Images.FirstOrDefault()?.Url"
+                     class="playerbar-art" />
+
+                <div class="d-flex flex-column">
+                    <strong @onclick="() => Play(item.Track.Uri)" style="cursor:pointer">
+                        @item.Track.Name
+                    </strong>
+                    <span>@string.Join(", ", item.Track.Artists.Select(a => a.Name))</span>
+                </div>
+
+                <span class="ms-auto text-light small">
+                    @FormatTime(item.Track.DurationMs)
+                </span>
+            </div>
+        }
+    </div>
+
+    <div class="d-flex gap-3 mt-4">
+        <button class="btn btn-secondary" disabled="@(_offset == 0)" @onclick="PrevPage">Previous</button>
+        <button class="btn btn-secondary" disabled="@(_offset + _limit >= liked.Total)" @onclick="NextPage">Next</button>
+    </div>
+}
+
+@code {
+    private SpotifyLikedSongs? liked;
+    private int _offset = 0;
+    private int _limit = 50;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLikedSongs();
+    }
+
+    private async Task LoadLikedSongs()
+    {
+        liked = await Auth.GetLikedSongsAsync(_offset, _limit);
+    }
+
+    private async Task NextPage()
+    {
+        _offset += _limit;
+        await LoadLikedSongs();
+    }
+
+    private async Task PrevPage()
+    {
+        _offset -= _limit;
+        if (_offset < 0) _offset = 0;
+        await LoadLikedSongs();
+    }
+
+    private string FormatTime(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+
+    private async Task Play(string uri)
+    {
+        await Auth.PlayTrackAsync(uri);
+    }
+}

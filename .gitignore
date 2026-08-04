@@ -428,3 +428,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /SpotifyBlazor/Server/appsettings.json
+/SpotifyBlazor/Server/appsettings.Development.json

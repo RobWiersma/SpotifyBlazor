@@ -21,7 +21,9 @@ else
             <div class="liked-item d-flex align-items-center gap-3 mb-3">
 
                 <img src="@item.Track.Album.Images.FirstOrDefault()?.Url"
-                     class="playerbar-art" />
+                     class="liked-art"
+                     @onclick="() => GoToAlbum(item.Track.Album.Id)"
+                     style="cursor:pointer" />
 
                 <div class="d-flex flex-column">
                     <strong @onclick="() => Play(item.Track.Uri)" style="cursor:pointer">
@@ -80,5 +82,11 @@ else
     private async Task Play(string uri)
     {
         await Auth.PlayTrackAsync(uri);
+    }
+
+    [Inject] NavigationManager Nav { get; set; }
+    private void GoToAlbum(string albumId)
+    {
+        Nav.NavigateTo($"/album/{albumId}");
     }
 }

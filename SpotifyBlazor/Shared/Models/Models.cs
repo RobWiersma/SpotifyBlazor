@@ -50,8 +50,11 @@ namespace SpotifyBlazor.Shared.Models
 
     public class SpotifyImage
     {
+        [JsonPropertyName("height")]
         public int Height { get; set; }
+        [JsonPropertyName("width")]
         public int Width { get; set; }
+        [JsonPropertyName("url")]
         public string? Url { get; set; }
     }
 
@@ -70,110 +73,225 @@ namespace SpotifyBlazor.Shared.Models
 
     public class SpotifyTrack
     {
-        public string? Name { get; set; }
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+
+        [JsonPropertyName("uri")]
+        public string Uri { get; set; }
+
         [JsonPropertyName("duration_ms")]
         public int DurationMs { get; set; }
-        public bool IsPlayable { get; set; }
-        public bool IsLocal { get; set; }
-        public int Popularity { get; set; }
-        public string? PreviewUrl { get; set; }
+
+        [JsonPropertyName("track_number")]
         public int TrackNumber { get; set; }
-        [JsonPropertyName("uri")]
-        public string? Uri { get; set; }
-        public string? Id { get; set; }
-        public string? Href { get; set; }
 
-        public List<SpotifyArtist> Artists { get; set; } = new();
-        public SpotifyAlbum Album { get; set; } = default!;
+        [JsonPropertyName("disc_number")]
+        public int DiscNumber { get; set; }
+
+        [JsonPropertyName("explicit")]
+        public bool Explicit { get; set; }
+
+        [JsonPropertyName("is_local")]
+        public bool IsLocal { get; set; }
+
+        [JsonPropertyName("href")]
+        public string Href { get; set; }
+
+        [JsonPropertyName("external_urls")]
+        public Dictionary<string, string> ExternalUrls { get; set; }
+
+        [JsonPropertyName("artists")]
+        public List<SpotifyArtist> Artists { get; set; }
+
+        [JsonPropertyName("album")]
+        public SpotifyAlbum? Album { get; set; }
     }
 
-    public class SpotifyArtist
-    {
-        public string? Id { get; set; }
-        public string? Name { get; set; }
-        public string? Href { get; set; }
-        public string? Uri { get; set; }
-        public Dictionary<string, string>? ExternalUrls { get; set; }
-    }
 
-    public class SpotifyAlbum
-    {
-        public string? AlbumType { get; set; }
-        public string? Name { get; set; }
-        public List<string> AvailableMarkets { get; set; } = new();
-        public List<SpotifyImage> Images { get; set; } = new();
-        public List<SpotifyArtist> Artists { get; set; } = new();
-    }
-
-    public class ConfigService
-    {
-        private readonly HttpClient _http;
-
-        public string? ClientId { get; private set; }
-        public string? CallbackUri { get; private set; }
-        public bool IsLoaded { get; private set; }
-
-        public event Action? OnChange;
-
-        public ConfigService(HttpClient http)
+        public class SpotifyArtist
         {
-            _http = http;
+            [JsonPropertyName("id")]
+            public string Id { get; set; }
+
+            [JsonPropertyName("name")]
+            public string Name { get; set; }
+
+            [JsonPropertyName("uri")]
+            public string Uri { get; set; }
+
+            [JsonPropertyName("href")]
+            public string Href { get; set; }
+
+            [JsonPropertyName("type")]
+            public string Type { get; set; }
+
+            [JsonPropertyName("external_urls")]
+            public Dictionary<string, string> ExternalUrls { get; set; }
         }
 
-        public async Task LoadAsync()
+        public class SpotifyAlbum
         {
-            try
-            {
-                var cfg = await _http.GetFromJsonAsync<ConfigModel>("/api/config");
+            [JsonPropertyName("album_type")]
+            public string AlbumType { get; set; }
 
-                if (cfg is not null)
+            [JsonPropertyName("total_tracks")]
+            public int TotalTracks { get; set; }
+
+            [JsonPropertyName("external_urls")]
+            public Dictionary<string, string> ExternalUrls { get; set; }
+
+            [JsonPropertyName("href")]
+            public string Href { get; set; }
+
+            [JsonPropertyName("id")]
+            public string Id { get; set; }
+
+            [JsonPropertyName("images")]
+            public List<SpotifyImage> Images { get; set; }
+
+            [JsonPropertyName("name")]
+            public string Name { get; set; }
+
+            [JsonPropertyName("release_date")]
+            public string ReleaseDate { get; set; }
+
+            [JsonPropertyName("release_date_precision")]
+            public string ReleaseDatePrecision { get; set; }
+
+            [JsonPropertyName("type")]
+            public string Type { get; set; }
+
+            [JsonPropertyName("uri")]
+            public string Uri { get; set; }
+
+            [JsonPropertyName("artists")]
+            public List<SpotifyArtist> Artists { get; set; }
+
+            [JsonPropertyName("tracks")]
+            public SpotifyAlbumTracks Tracks { get; set; }
+
+            [JsonPropertyName("copyrights")]
+            public List<SpotifyCopyright> Copyrights { get; set; }
+
+            [JsonPropertyName("external_ids")]
+            public SpotifyExternalIds ExternalIds { get; set; }
+
+            [JsonPropertyName("genres")]
+            public List<string> Genres { get; set; }
+        }
+
+        public class ConfigService
+        {
+            private readonly HttpClient _http;
+
+            public string? ClientId { get; private set; }
+            public string? CallbackUri { get; private set; }
+            public bool IsLoaded { get; private set; }
+
+            public event Action? OnChange;
+
+            public ConfigService(HttpClient http)
+            {
+                _http = http;
+            }
+
+            public async Task LoadAsync()
+            {
+                try
                 {
-                    ClientId = cfg.ClientId;
-                    CallbackUri = cfg.CallbackUri;
-                    IsLoaded = true;
+                    var cfg = await _http.GetFromJsonAsync<ConfigModel>("/api/config");
+
+                    if (cfg is not null)
+                    {
+                        ClientId = cfg.ClientId;
+                        CallbackUri = cfg.CallbackUri;
+                        IsLoaded = true;
+                    }
+                    else
+                    {
+                        IsLoaded = false;
+                    }
                 }
-                else
+                catch
                 {
                     IsLoaded = false;
                 }
-            }
-            catch
-            {
-                IsLoaded = false;
+
+                NotifyStateChanged();
             }
 
-            NotifyStateChanged();
+            private void NotifyStateChanged() => OnChange?.Invoke();
         }
 
-        private void NotifyStateChanged() => OnChange?.Invoke();
+        public class ConfigModel
+        {
+            public string? ClientId { get; set; }
+            public string? CallbackUri { get; set; }
+        }
+
+        public class SpotifyLikedSongs
+        {
+            public string? Href { get; set; }
+            public int Limit { get; set; }
+            public string? Next { get; set; }
+            public int Offset { get; set; }
+            public string? Previous { get; set; }
+            public int Total { get; set; }
+
+            public List<LikedSongItem> Items { get; set; } = new();
+        }
+
+        public class LikedSongItem
+        {
+            public DateTime AddedAt { get; set; }
+
+            // IMPORTANT: JSON uses "track"
+            public SpotifyTrack Track { get; set; } = default!;
+        }
+
+        public class SpotifyAlbumTracks
+        {
+            [JsonPropertyName("href")]
+            public string Href { get; set; }
+
+            [JsonPropertyName("limit")]
+            public int Limit { get; set; }
+
+            [JsonPropertyName("next")]
+            public string Next { get; set; }
+
+            [JsonPropertyName("offset")]
+            public int Offset { get; set; }
+
+            [JsonPropertyName("previous")]
+            public string Previous { get; set; }
+
+            [JsonPropertyName("total")]
+            public int Total { get; set; }
+
+            [JsonPropertyName("items")]
+            public List<SpotifyTrack> Items { get; set; }
+
+        }
+
+        public class SpotifyCopyright
+        {
+            [JsonPropertyName("text")]
+            public string Text { get; set; }
+
+            [JsonPropertyName("type")]
+            public string Type { get; set; }
+        }
+
+
+
+        public class SpotifyExternalIds
+        {
+            [JsonPropertyName("upc")]
+            public string Upc { get; set; }
+        }
+
     }
-
-    public class ConfigModel
-    {
-        public string? ClientId { get; set; }
-        public string? CallbackUri { get; set; }
-    }
-
-    public class SpotifyLikedSongs
-    {
-        public string? Href { get; set; }
-        public int Limit { get; set; }
-        public string? Next { get; set; }
-        public int Offset { get; set; }
-        public string? Previous { get; set; }
-        public int Total { get; set; }
-
-        public List<LikedSongItem> Items { get; set; } = new();
-    }
-
-    public class LikedSongItem
-    {
-        public DateTime AddedAt { get; set; }
-
-        // IMPORTANT: JSON uses "track"
-        public SpotifyTrack Track { get; set; } = default!;
-    }
-
-
-
-}

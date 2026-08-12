@@ -1,7 +1,8 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using Microsoft.JSInterop;
+﻿using Microsoft.JSInterop;
 using SpotifyBlazor.Shared.Models;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace SpotifyBlazor.Client.Services;
 
@@ -289,4 +290,20 @@ public class SpotifyAuthService
 
     }
 
+    public async Task<SpotifyAlbum> GetAlbumAsync(string albumId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/albums/{albumId}");
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+        res.EnsureSuccessStatusCode();
+
+        var json = await res.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<SpotifyAlbum>(json)!;
+    }
 }

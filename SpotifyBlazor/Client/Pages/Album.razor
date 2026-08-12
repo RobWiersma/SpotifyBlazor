@@ -1,0 +1,59 @@
+﻿@page "/album/{AlbumId}"
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject SpotifyAuthService Auth
+
+<h2>@album?.Name</h2>
+
+@if (album == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="d-flex gap-4">
+
+        <img src="@album.Images.FirstOrDefault()?.Url"
+             style="width:200px; border-radius:8px;" />
+
+        <div>
+            <h3>@album.Name</h3>
+            <p>@string.Join(", ", album.Artists.Select(a => a.Name))</p>
+            <p>Released: @album.ReleaseDate</p>
+        </div>
+    </div>
+
+    <h4 class="mt-4">Tracks</h4>
+
+    <ul class="list-group">
+        @foreach (var track in album.Tracks.Items)
+        {
+            <li class="album-track"
+                @onclick="() => Play(track.Uri)">
+                <span>@track.Name</span>
+                <span>@FormatTime(track.DurationMs)</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter] public string AlbumId { get; set; }
+    private SpotifyAlbum? album;
+
+    protected override async Task OnInitializedAsync()
+    {
+        album = await Auth.GetAlbumAsync(AlbumId);
+    }
+
+    private async Task Play(string uri)
+    {
+        await Auth.PlayTrackAsync(uri);
+    }
+
+    private string FormatTime(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+}

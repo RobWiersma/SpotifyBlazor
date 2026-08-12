@@ -91,3 +91,14 @@ h1:focus {
 .loginheader{
     background:white;
 }
+
+.album-track {
+    background-color: #1e1e1e;
+    color: #fff;
+    padding: 12px;
+    border-bottom: 1px solid #333;
+}
+
+.album-track:hover {
+    background-color: #2a2a2a;
+}

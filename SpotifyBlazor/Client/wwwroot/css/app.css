@@ -102,3 +102,15 @@ h1:focus {
 .album-track:hover {
     background-color: #2a2a2a;
 }
+
+a {
+    color: #81b3a1;
+}
+
+a:hover {
+    color: #a8d5c2;
+}
+
+.nav-link {
+    color: #81b3a1;
+}

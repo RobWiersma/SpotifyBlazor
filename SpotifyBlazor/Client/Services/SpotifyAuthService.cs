@@ -72,14 +72,13 @@ public class SpotifyAuthService
         NotifyStateChanged();
     }
 
-    // Refresh token if expired or about to expire
     public async Task<bool> RefreshIfNeededAsync()
     {
         if (string.IsNullOrEmpty(RefreshToken))
             return false;
 
-        //if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
-            //return false;
+        if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
+            return false;
 
         var response = await _http.PostAsJsonAsync("/api/spotify/refresh",
             new RefreshRequest { RefreshToken = RefreshToken! });
@@ -92,6 +91,9 @@ public class SpotifyAuthService
             return false;
 
         AccessToken = token.access_token;
+
+        RefreshToken = token.refresh_token ?? RefreshToken;
+
         ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in);
 
         await PersistAsync();
@@ -306,4 +308,81 @@ public class SpotifyAuthService
         var json = await res.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<SpotifyAlbum>(json)!;
     }
+
+    public async Task<SpotifyArtistFull?> GetArtistAsync(string artistId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/artists/{artistId}?market=US");
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return null;
+
+        var test = await res.Content.ReadAsStringAsync();
+
+        return await res.Content.ReadFromJsonAsync<SpotifyArtistFull>();
+    }
+
+    public async Task<List<SpotifyTrack>> GetArtistTopTracksByPopularityAsync(string artistId)
+    {
+        await RefreshIfNeededAsync();
+
+        // 1. Get all albums for the artist
+        var albums = await GetArtistAlbumsAsync(artistId);
+        var tracks = new List<SpotifyTrack>();
+
+        // 2. Fetch tracks for each album
+        foreach (var album in albums.Items)
+        {
+            var albumTracks = await GetAlbumTracksAsync(album.Id);
+            if (albumTracks?.Items != null)
+                tracks.AddRange(albumTracks.Items);
+        }
+
+        // 3. Sort by popularity (descending)
+        return tracks
+            .OrderBy(t => t.Name)
+            .Take(10)
+            .ToList();
+    }
+
+    public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsAsync(string artistId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/artists/{artistId}/albums?include_groups=album,single,compilation");
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return new SpotifyPaging<SpotifyAlbum>();
+
+        return await res.Content.ReadFromJsonAsync<SpotifyPaging<SpotifyAlbum>>();
+    }
+
+    public async Task<SpotifyPaging<SpotifyTrack>> GetAlbumTracksAsync(string albumId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/albums/{albumId}/tracks?limit=50");
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return new SpotifyPaging<SpotifyTrack>();
+
+        return await res.Content.ReadFromJsonAsync<SpotifyPaging<SpotifyTrack>>();
+    }
+
 }

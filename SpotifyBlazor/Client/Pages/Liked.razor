@@ -29,7 +29,11 @@ else
                     <strong @onclick="() => Play(item.Track.Uri)" style="cursor:pointer">
                         @item.Track.Name
                     </strong>
-                    <span>@string.Join(", ", item.Track.Artists.Select(a => a.Name))</span>
+                    <span class="artist-link"
+                          @onclick="() => GoToArtist(item.Track.Artists.First().Id)"
+                          style="cursor:pointer">
+                        @string.Join(", ", item.Track.Artists.Select(a => a.Name))
+                    </span>
                 </div>
 
                 <span class="ms-auto text-light small">
@@ -88,5 +92,10 @@ else
     private void GoToAlbum(string albumId)
     {
         Nav.NavigateTo($"/album/{albumId}");
+    }
+
+    private void GoToArtist(string artistId)
+    {
+        Nav.NavigateTo($"/artist/{artistId}");
     }
 }

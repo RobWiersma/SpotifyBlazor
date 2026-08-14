@@ -63,6 +63,26 @@ app.MapPost("/api/spotify/exchange", async (
     return Results.Ok(json);
 });
 
+app.MapPost("/api/spotify/refresh", async (
+    HttpClient http,
+    IConfiguration config,
+    RefreshRequest req) =>
+{
+    var values = new Dictionary<string, string>
+    {
+        ["grant_type"] = "refresh_token",
+        ["refresh_token"] = req.RefreshToken,
+        ["client_id"] = config["ConnectionStrings:clientId"],
+        ["client_secret"] = config["ConnectionStrings:clientSecret"]
+    };
+
+    var content = new FormUrlEncodedContent(values);
+    var response = await http.PostAsync("https://accounts.spotify.com/api/token", content);
+
+    var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
+    return Results.Ok(json);
+});
+
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

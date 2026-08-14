@@ -1,0 +1,80 @@
+﻿@page "/artist/{ArtistId}"
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject SpotifyAuthService Auth
+
+@if (artist == null)
+{
+    <p>Loading artist...</p>
+}
+else
+{
+    <div class="d-flex gap-4">
+
+        <img src="@artist.Images.FirstOrDefault()?.Url"
+             style="width:220px; border-radius:8px;" />
+
+        <div>
+            <h3>@artist.Name</h3>
+            @if (artist.Followers != null)
+            {
+                <p><strong>Followers:</strong> @artist.Followers.Total</p>
+            }
+
+            @if (artist.Genres != null && artist.Genres.Any())
+            {
+                <p><strong>Genres:</strong> @string.Join(", ", artist.Genres)</p>
+            }
+        </div>
+    </div>
+
+    <h4 class="mt-4">Top Tracks</h4>
+
+    @if (topTracks == null)
+    {
+        <p>Loading tracks...</p>
+    }
+    else if (!topTracks.Any())
+    {
+        <p>No tracks found.</p>
+    }
+    else
+    {
+        <ul class="list-group">
+            @foreach (var track in topTracks)
+            {
+                <li class="list-group-item artist-track"
+                    @onclick="() => Play(track.Uri)"
+                    style="cursor:pointer">
+
+                    <span>@track.Name</span>
+                    <span>@FormatTime(track.DurationMs)</span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public string ArtistId { get; set; }
+
+    private SpotifyArtistFull? artist;
+    private List<SpotifyTrack>? topTracks;
+
+    protected override async Task OnInitializedAsync()
+    {
+        artist = await Auth.GetArtistAsync(ArtistId);
+        topTracks = await Auth.GetArtistTopTracksByPopularityAsync(ArtistId);
+    }
+
+    private async Task Play(string uri)
+    {
+        await Auth.PlayTrackAsync(uri);
+    }
+
+    private string FormatTime(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+}

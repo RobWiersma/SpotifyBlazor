@@ -23,16 +23,17 @@ Features
 Token Refresh Logic
 
 Access tokens refresh only when close to expiration:
-'''csharp
+```csharp
 
 if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
     return false;
-'''
+```
 
 This prevents unnecessary refresh calls and keeps playback stable.
+
+```csharp
 Models
 SpotifyPaging<T>
-csharp
 
 public class SpotifyPaging<T>
 {
@@ -45,8 +46,10 @@ public class SpotifyPaging<T>
     public int Total { get; set; }
 }
 
+```
+
+```csharp
 SpotifyTrack
-csharp
 
 public class SpotifyTrack
 {
@@ -58,6 +61,8 @@ public class SpotifyTrack
     public List<SpotifyArtist> Artists { get; set; }
     public int Popularity { get; set; }
 }
+
+```
 
 Setup
 

@@ -2,6 +2,7 @@ SpotifyBlazor
 
 A lightweight Blazor WebAssembly Spotify client powered by the Spotify Web API.
 Browse artists, view albums, play tracks, and explore your Spotify library through a fast, modern UI.
+
 Overview
 
 SpotifyBlazor uses Spotify’s Authorization Code Flow for authentication.

@@ -1,3 +1,5 @@
+https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
+
 SpotifyBlazor
 
 A lightweight Blazor WebAssembly Spotify client powered by the Spotify Web API.

@@ -1,32 +1,26 @@
 SpotifyBlazor
 
-A lightweight Blazor WebAssembly client for Spotify.
-Browse artists, view albums, play tracks, and explore your library using the Spotify Web API + Web Playback SDK.
+A lightweight Blazor WebAssembly Spotify client powered by the Spotify Web API and Web Playback SDK.
+Browse artists, view albums, play tracks, and explore your Spotify library through a fast, modern UI.
+Overview
+
+SpotifyBlazor uses Spotify’s Authorization Code Flow for authentication and integrates directly with the Web Playback SDK for in‑browser audio playback.
+The app includes artist pages, album browsing, track playback, search, and a Liked Songs viewer.
 Features
 
     Artist pages with full metadata
 
-    Auto‑generated Top Tracks (popularity‑based)
-
-    Clickable track playback via Spotify Web Playback
+    Clickable track playback
 
     Liked Songs viewer
 
     Search for artists, albums, and tracks
 
-    Secure OAuth login with automatic token refresh
+    Smart “Back” navigation using from= query parameters
 
-Tech Stack
+    Automatic access token refresh
 
-    Blazor WebAssembly
-
-    ASP.NET Core backend (OAuth + refresh token endpoint)
-
-    Spotify Web API
-
-    Spotify Web Playback SDK
-
-Token Refresh
+Token Refresh Logic
 
 Access tokens refresh only when close to expiration:
 csharp
@@ -35,14 +29,6 @@ if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
     return false;
 
 This prevents unnecessary refresh calls and keeps playback stable.
-Navigation
-
-Artist pages accept a from parameter:
-Code
-
-/artist/{id}?from=liked
-
-This enables a simple “Back” button that returns to the correct page.
 Models
 SpotifyPaging<T>
 csharp
@@ -81,13 +67,13 @@ Setup
 
     https://localhost:5001/auth/callback
 
-    Add client ID + secret to appsettings.json
+    Add your client ID and secret to appsettings.json
 
-    Run server + client
+    Run the server
+
+    Run the Blazor client
 
     Log in with Spotify
-
-    Start browsing and playing music
 
 License
 

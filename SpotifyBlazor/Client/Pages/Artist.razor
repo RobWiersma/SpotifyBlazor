@@ -2,6 +2,7 @@
 @using SpotifyBlazor.Client.Services
 @using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
+@inject NavigationManager Navigation
 
 @if (artist == null)
 {
@@ -28,43 +29,41 @@ else
         </div>
     </div>
 
-    <h4 class="mt-4">Top Tracks</h4>
+    @if (albums != null && albums.Any())
+{
+    <h3 class="mt-4 mb-3">Albums</h3>
 
-    @if (topTracks == null)
-    {
-        <p>Loading tracks...</p>
-    }
-    else if (!topTracks.Any())
-    {
-        <p>No tracks found.</p>
-    }
-    else
-    {
-        <ul class="list-group">
-            @foreach (var track in topTracks)
-            {
-                <li class="list-group-item artist-track"
-                    @onclick="() => Play(track.Uri)"
-                    style="cursor:pointer">
+        <div class="album-wrap">
+        @foreach (var album in albums)
+        {
+             var albumUrl = $"/album/{album.Id}?from=artist";
 
-                    <span>@track.Name</span>
-                    <span>@FormatTime(track.DurationMs)</span>
-                </li>
-            }
-        </ul>
-    }
+            
+            <div class="album-item"
+                     @onclick="() => Navigation.NavigateTo(albumUrl)">
+
+                <img src="@album.Images.FirstOrDefault()?.Url"
+                     alt="@album.Name"
+                     class="album-cover-small" />
+
+                <div class="album-title">@album.Name</div>
+                <div class="album-date">@album.ReleaseDate</div>
+            </div>
+        }
+    </div>
+}
 }
 
 @code {
     [Parameter] public string ArtistId { get; set; }
 
     private SpotifyArtistFull? artist;
-    private List<SpotifyTrack>? topTracks;
+    private List<SpotifyAlbum>? albums;
 
     protected override async Task OnInitializedAsync()
     {
         artist = await Auth.GetArtistAsync(ArtistId);
-        topTracks = await Auth.GetArtistTopTracksByPopularityAsync(ArtistId);
+        albums = await Auth.GetAllArtistAlbums(ArtistId);
     }
 
     private async Task Play(string uri)

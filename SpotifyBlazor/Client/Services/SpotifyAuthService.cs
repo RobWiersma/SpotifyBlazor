@@ -351,22 +351,34 @@ public class SpotifyAuthService
             .ToList();
     }
 
-    public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsAsync(string artistId)
+    public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsAsync(
+    string artistId,
+    int limit = 20,
+    int offset = 0)
     {
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Get,
-            $"https://api.spotify.com/v1/artists/{artistId}/albums?include_groups=album,single,compilation");
+        var url =
+            $"https://api.spotify.com/v1/artists/{artistId}/albums" +
+            $"?include_groups=album,single,compilation,appears_on" +
+            $"&limit={limit}&offset={offset}";
 
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
+
         if (!res.IsSuccessStatusCode)
-            return new SpotifyPaging<SpotifyAlbum>();
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            Console.WriteLine("Spotify Error: " + body);
+            return null;
+        }
 
         return await res.Content.ReadFromJsonAsync<SpotifyPaging<SpotifyAlbum>>();
     }
+
 
     public async Task<SpotifyPaging<SpotifyTrack>> GetAlbumTracksAsync(string albumId)
     {
@@ -383,6 +395,30 @@ public class SpotifyAuthService
             return new SpotifyPaging<SpotifyTrack>();
 
         return await res.Content.ReadFromJsonAsync<SpotifyPaging<SpotifyTrack>>();
+    }
+
+    public async Task<List<SpotifyAlbum>> GetAllArtistAlbums(string artistId)
+    {
+        var albums = new List<SpotifyAlbum>();
+        int limit = 10;
+        int offset = 0;
+
+        while (true)
+        {
+            var page = await GetArtistAlbumsAsync(artistId, limit, offset);
+
+            if (page?.Items == null || page.Items.Count == 0)
+                break;
+
+            albums.AddRange(page.Items);
+
+            offset += limit;
+
+            if (page.Items.Count < limit)
+                break;
+        }
+
+        return albums;
     }
 
 }

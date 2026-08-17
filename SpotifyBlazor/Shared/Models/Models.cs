@@ -342,13 +342,26 @@ namespace SpotifyBlazor.Shared.Models
 
     public class SpotifyPaging<T>
     {
+        [JsonPropertyName("href")]
         public string Href { get; set; } = string.Empty;
-        public List<T> Items { get; set; } = new();
-        public int Limit { get; set; }
-        public string Next { get; set; } = string.Empty;
-        public int Offset { get; set; }
-        public string Previous { get; set; } = string.Empty;
-        public int Total { get; set; }
-    }
 
-}
+        [JsonPropertyName("items")]
+        public List<T> Items { get; set; } = new();
+
+        [JsonPropertyName("limit")]
+        public int Limit { get; set; }
+
+        [JsonPropertyName("next")]
+        public string Next { get; set; } = string.Empty;
+
+        [JsonPropertyName("offset")]
+        public int Offset { get; set; }
+
+        [JsonPropertyName("previous")]
+        public string Previous { get; set; } = string.Empty;
+
+        [JsonPropertyName("total")]
+        public int Total { get; set; }
+
+    }
+    }

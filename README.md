@@ -23,10 +23,11 @@ Features
 Token Refresh Logic
 
 Access tokens refresh only when close to expiration:
-csharp
+'''csharp
 
 if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
     return false;
+'''
 
 This prevents unnecessary refresh calls and keeps playback stable.
 Models

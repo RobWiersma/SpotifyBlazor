@@ -421,4 +421,76 @@ public class SpotifyAuthService
         return albums;
     }
 
+    public async Task<List<SearchResult>> SearchAsync(string query)
+    {
+        var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track,artist,album&limit=10";
+
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var result = json.ToString();
+
+        var results = new List<SearchResult>();
+
+        // Tracks
+        if (json.TryGetProperty("tracks", out var tracks) &&
+            tracks.TryGetProperty("items", out var trackItems))
+        {
+            foreach (var item in trackItems.EnumerateArray())
+            {
+                results.Add(new SearchResult
+                {
+                    Id = item.GetProperty("uri").GetString(),
+                    Type = "track",
+                    Name = item.GetProperty("name").GetString(),
+                    ImageUrl = item.GetProperty("album")
+                                  .GetProperty("images")[0]
+                                  .GetProperty("url").GetString()
+                });
+            }
+        }
+
+        // Artists
+        if (json.TryGetProperty("artists", out var artists) &&
+            artists.TryGetProperty("items", out var artistItems))
+        {
+            foreach (var item in artistItems.EnumerateArray())
+            {
+                results.Add(new SearchResult
+                {
+                    Id = item.GetProperty("id").GetString(),
+                    Type = "artist",
+                    Name = item.GetProperty("name").GetString(),
+                    ImageUrl = item.GetProperty("images").GetArrayLength() > 0
+                        ? item.GetProperty("images")[0].GetProperty("url").GetString()
+                        : ""
+                });
+            }
+        }
+
+        // Albums
+        if (json.TryGetProperty("albums", out var albums) &&
+            albums.TryGetProperty("items", out var albumItems))
+        {
+            foreach (var item in albumItems.EnumerateArray())
+            {
+                results.Add(new SearchResult
+                {
+                    Id = item.GetProperty("id").GetString(),
+                    Type = "album",
+                    Name = item.GetProperty("name").GetString(),
+                    ImageUrl = item.GetProperty("images")[0]
+                                  .GetProperty("url").GetString()
+                });
+            }
+        }
+
+        return results;
+    }
+
 }

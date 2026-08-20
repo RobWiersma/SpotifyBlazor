@@ -1,0 +1,90 @@
+﻿@page "/search"
+@inject NavigationManager Nav
+@inject HttpClient Http
+@inject SpotifyAuthService Auth
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+
+<h2>Search Results</h2>
+
+@if (IsSearching)
+{
+    <p>Searching...</p>
+}
+
+@if (Results?.Any() == true)
+{
+    <div class="results">
+        @foreach (var item in Results)
+        {
+            <div class="result-item" @onclick="() => Navigate(item)">
+                <img src="@item.ImageUrl" width="50" />
+                <strong>@item.Name</strong>
+                <br />
+                <br />
+            </div>
+        }
+    </div>
+}
+
+@code {
+    string Query = "";
+    bool IsSearching = false;
+    List<SearchResult> Results = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var q = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("q");
+
+        if (q != Query)
+        {
+            Query = q;
+            await RunSearch();
+        }
+    }
+
+    async Task RunSearch()
+    {
+        IsSearching = true;
+
+        var queryText = $"/api/search?q={Query}";
+
+        Results = await Auth.SearchAsync(queryText);
+
+        IsSearching = false;
+    }
+
+    void HandleSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            Nav.NavigateTo($"/search?q={Query}");
+        }
+    }
+
+    void Navigate(SearchResult item)
+    {
+        if (item.Type == "track")
+        {
+            _ = Play(item.Id);
+            return;
+        }
+
+        // normal navigation for artist/album
+        switch (item.Type)
+        {
+            case "artist":
+                Nav.NavigateTo($"/artist/{item.Id}");
+                break;
+            case "album":
+                Nav.NavigateTo($"/album/{item.Id}");
+                break;
+        }
+    }
+
+    async Task Play(string id)
+    {
+        await Auth.PlayTrackAsync(id);
+    }
+}

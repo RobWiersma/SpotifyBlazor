@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @inject ConfigService Config
 @inject SpotifyAuthService Auth
+@inject NavigationManager Navigation
 @using SpotifyBlazor.Client.Shared
 @using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Layout
@@ -20,6 +21,12 @@
 
             <SpotHeader />
 
+            <input @bind="SearchText"
+                   @bind:event="oninput"
+                   @onkeydown="HandleSearchKey"
+                   placeholder="Search…"
+                   class="search-box" />
+
             <main class="flex-grow-1">
                 <article class="content px-4">
                     @Body
@@ -34,3 +41,16 @@
     </div>
 
 </div>
+
+
+@code {
+    string SearchText = "";
+
+    void HandleSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            Navigation.NavigateTo($"/search?q={SearchText}", forceLoad: true);
+        }
+    }
+}

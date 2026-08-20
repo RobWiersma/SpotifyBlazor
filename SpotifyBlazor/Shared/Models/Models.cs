@@ -364,4 +364,12 @@ namespace SpotifyBlazor.Shared.Models
         public int Total { get; set; }
 
     }
+
+    public class SearchResult
+    {
+        public string Id { get; set; }
+        public string Type { get; set; } // track, artist, album
+        public string Name { get; set; }
+        public string ImageUrl { get; set; }
     }
+}

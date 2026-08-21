@@ -1,0 +1,39 @@
+﻿@page "/playlists"
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject SpotifyAuthService Auth
+@inject NavigationManager Nav
+
+<h3>Your Playlists</h3>
+
+@if (Playlistz == null)
+{
+    <p>Loading playlists...</p>
+}
+else
+{
+    <div class="playlist-grid">
+        @foreach (var p in Playlistz.Items)
+        {
+            <div class="playlist-card"
+                 @onclick="@(() => Nav.NavigateTo($"/playlist/{p.Id}"))">
+
+                <img src="@p.Images?.FirstOrDefault()?.Url"
+                     class="playlist-cover" />
+
+                <div class="playlist-name">@p.Name</div>
+                <div class="playlist-owner">@p.Owner.DisplayName</div>
+                <div class="playlist-count">@p.Items.Total tracks</div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    public SpotifyPlaylistResponse? Playlistz { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Playlistz = await Auth.GetUserPlaylistsAsync();
+    }
+}

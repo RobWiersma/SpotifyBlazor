@@ -1,0 +1,89 @@
+﻿@page "/playlist/{PlaylistId}"
+@using SpotifyBlazor.Client.Services;
+@using SpotifyBlazor.Shared.Models;
+@inject SpotifyAuthService Auth
+@inject NavigationManager Nav
+
+<h3>Playlist Details</h3>
+
+@if (Playlist == null)
+{
+    <p>Loading playlist...</p>
+}
+else
+{
+    <div class="playlist-details-header">
+        <img src="@Playlist.Images?.FirstOrDefault()?.Url"
+             class="playlist-details-cover" />
+
+        <div class="playlist-details-info">
+            <h2>@Playlist.Name</h2>
+            <p>@Playlist.Description</p>
+            <p><strong>Owner:</strong> @Playlist.Owner.DisplayName</p>
+            <p><strong>Total Tracks:</strong> @Tracks.Count</p>
+
+            
+        </div>
+    </div>
+
+
+    <h3>Tracks</h3>
+
+    <ul class="track-list">
+        @foreach (var t in Tracks)
+        {
+            <li class="track-item">
+                <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
+                     class="track-cover"
+                     style="cursor:pointer"
+                     @onclick="@(() => Nav.NavigateTo($"/album/{t.Track?.Album?.Id}"))" />
+
+                <div class="track-info">
+                    <div class="track-name"
+                         style="cursor:pointer"
+                         @onclick="@(() => Play(t.Track?.Uri))">
+                        @t.Track?.Name
+                    </div>
+                    <div class="track-artist">
+                        @foreach (var artist in t.Track?.Artists ?? new List<SimpleArtist>())
+                        {
+                            <span class="artist-link"
+                                  style="cursor:pointer; text-decoration:underline;"
+                                  @onclick="@(() => Nav.NavigateTo($"/artist/{artist.Id}"))">
+                                @artist.Name
+                            </span>
+
+                            @if (artist != t.Track.Artists.Last())
+                            {
+                                <span>, </span>
+                            }
+                        }
+                    </div>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter] public string PlaylistId { get; set; }
+
+    public SpotifyPlaylist Playlist { get; set; }
+    public List<PlaylistTrackItem> Tracks { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine($"PlaylistId = {PlaylistId}");
+
+        Playlist = await Auth.GetPlaylistAsync(PlaylistId);
+        Console.WriteLine($"Playlist loaded? {Playlist != null}");
+
+        Tracks = await Auth.GetPlaylistTracksAsync(PlaylistId);
+        Console.WriteLine($"Tracks loaded? {Tracks?.Count}");
+    }
+
+    private async Task Play(string uri)
+    {
+        await Auth.PlayTrackAsync(uri);
+    }
+}

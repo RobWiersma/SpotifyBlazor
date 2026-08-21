@@ -493,4 +493,63 @@ public class SpotifyAuthService
         return results;
     }
 
+    public async Task<SpotifyPlaylistResponse> GetUserPlaylistsAsync()
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            "https://api.spotify.com/v1/me/playlists"
+        );
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+
+        var json = await response.Content.ReadAsStringAsync();
+
+        var result = JsonSerializer.Deserialize<SpotifyPlaylistResponse>(json);
+
+        return result;
+    }
+
+    public async Task<SpotifyPlaylist> GetPlaylistAsync(string playlistId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://api.spotify.com/v1/playlists/{playlistId}"
+        );
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        return JsonSerializer.Deserialize<SpotifyPlaylist>(raw);
+    }
+
+    public async Task<List<PlaylistTrackItem>> GetPlaylistTracksAsync(string playlistId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://api.spotify.com/v1/playlists/{playlistId}/items"
+        );
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        var result = JsonSerializer.Deserialize<PlaylistTrackResponse>(raw);
+
+        return result.Items;
+    }
+
 }

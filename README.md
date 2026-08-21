@@ -1,89 +1,74 @@
 https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
 
-SpotifyBlazor
+Spotify Blazor Client
 
-A lightweight Blazor WebAssembly Spotify client powered by the Spotify Web API.
-Browse artists, view albums, play tracks, and explore your Spotify library through a fast, modern UI.
+A simple web app that connects to the Spotify API and lets you browse artists, albums, and tracks.
+Built with C#, Blazor WebAssembly, and ASP.NET Core.
+What This Project Does
 
-Overview
+    Lets a user log in with their Spotify account
 
-SpotifyBlazor uses Spotify’s Authorization Code Flow for authentication.
-The app includes artist pages, album browsing, track playback, search, and a Liked Songs viewer.
-Features
+    Shows artists, albums, and track lists
 
-    Artist pages with full metadata
+    Displays album covers and artist info
 
-    Clickable track playback
+    Lets you click an album to see its tracks
 
-    Liked Songs viewer
+    Uses Spotify’s official API to load real music data
 
-    Search for artists, albums, and tracks
+Tech Used
 
-    Smart “Back” navigation using from= query parameters
+    C# / .NET 8
 
-    Automatic access token refresh
+    Blazor WebAssembly (client‑side UI)
 
-Token Refresh Logic
+    ASP.NET Core (backend for Spotify login)
 
-Access tokens refresh only when close to expiration:
-```csharp
+    Spotify Web API
 
-if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
-    return false;
-```
+Why I Built It
 
-This prevents unnecessary refresh calls and keeps playback stable.
+I wanted to practice:
 
-```csharp
-Models
-SpotifyPaging<T>
+    Working with APIs
 
-public class SpotifyPaging<T>
-{
-    public string Href { get; set; } = string.Empty;
-    public List<T> Items { get; set; } = new();
-    public int Limit { get; set; }
-    public string Next { get; set; } = string.Empty;
-    public int Offset { get; set; }
-    public string Previous { get; set; } = string.Empty;
-    public int Total { get; set; }
-}
+    Building UI components in Blazor
 
-```
+    Handling OAuth login flows
 
-```csharp
-SpotifyTrack
+    Structuring a clean .NET project
 
-public class SpotifyTrack
-{
-    public string Id { get; set; }
-    public string Name { get; set; }
-    public int DurationMs { get; set; }
-    public string Uri { get; set; }
-    public SpotifyAlbum Album { get; set; }
-    public List<SpotifyArtist> Artists { get; set; }
-    public int Popularity { get; set; }
-}
+This project helped me sharpen my skills in modern .NET web development.
+How It Works (Simple Version)
 
-```
+    You log in with Spotify
 
-Setup
+    The app gets permission to load your music data
 
-    Create a Spotify Developer App
+    It shows artists, albums, and tracks
 
-    Add redirect URI:
-    Code
+    You can click an album to view its songs
 
-    https://localhost:5001/auth/callback
+Running the Project
 
-    Add your client ID and secret to appsettings.json
+You need:
 
-    Run the server
+    .NET 8
 
-    Run the Blazor client
+    A Spotify Developer account
 
-    Log in with Spotify
+    A Client ID + Client Secret
 
-License
+Then:
+bash
 
-MIT
+dotnet run --project Server
+dotnet run --project Client
+
+Notes
+
+    The app requires Spotify login
+
+    It only works for your own Spotify account
+
+    This project is for learning and showcasing .NET skills

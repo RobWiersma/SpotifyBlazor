@@ -33,33 +33,42 @@ else
         @foreach (var t in Tracks)
         {
             <li class="track-item">
-                <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                     class="track-cover"
-                     style="cursor:pointer"
-                     @onclick="@(() => Nav.NavigateTo($"/album/{t.Track?.Album?.Id}"))" />
 
-                <div class="track-info">
-                    <div class="track-name"
+                <div class="track-left">
+                    <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
+                         class="track-cover"
                          style="cursor:pointer"
-                         @onclick="@(() => Play(t.Track?.Uri))">
-                        @t.Track?.Name
-                    </div>
-                    <div class="track-artist">
-                        @foreach (var artist in t.Track?.Artists ?? new List<SimpleArtist>())
-                        {
-                            <span class="artist-link"
-                                  style="cursor:pointer; text-decoration:underline;"
-                                  @onclick="@(() => Nav.NavigateTo($"/artist/{artist.Id}"))">
-                                @artist.Name
-                            </span>
+                         @onclick="@(() => Nav.NavigateTo($"/album/{t.Track?.Album?.Id}"))" />
 
-                            @if (artist != t.Track.Artists.Last())
+                    <div class="track-info">
+                        <div class="track-name"
+                             style="cursor:pointer"
+                             @onclick="@(() => Play(t.Track?.Uri))">
+                            @t.Track?.Name
+                        </div>
+
+                        <div class="track-artist">
+                            @foreach (var artist in t.Track?.Artists ?? new List<SimpleArtist>())
                             {
-                                <span>, </span>
+                                <span class="artist-link"
+                                      style="cursor:pointer; text-decoration:underline;"
+                                      @onclick="@(() => Nav.NavigateTo($"/artist/{artist.Id}"))">
+                                    @artist.Name
+                                </span>
+
+                                @if (artist != t.Track.Artists.Last())
+                                {
+                                    <span>, </span>
+                                }
                             }
-                        }
+                        </div>
                     </div>
                 </div>
+
+                <div class="track-duration">
+                    @FormatDuration(t.Track?.DurationMs ?? 0)
+                </div>
+
             </li>
         }
     </ul>
@@ -85,5 +94,11 @@ else
     private async Task Play(string uri)
     {
         await Auth.PlayTrackAsync(uri);
+    }
+
+    private string FormatDuration(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
     }
 }

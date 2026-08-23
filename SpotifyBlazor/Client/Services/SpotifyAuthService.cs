@@ -552,4 +552,62 @@ public class SpotifyAuthService
         return result.Items;
     }
 
+    public async Task<List<SpotifyAlbum>> GetArtistAlbumsFirstPage(string artistId)
+    {
+        await RefreshIfNeededAsync();
+
+        var limit = 10;
+        var offset = 0;
+
+        var url =
+            $"https://api.spotify.com/v1/artists/{artistId}/albums" +
+            $"?include_groups=album,single,compilation,appears_on" +
+            $"&limit={limit}&offset={offset}";
+
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        var page = JsonSerializer.Deserialize<SpotifyPaging<SpotifyAlbum>>(raw);
+
+        return page?.Items ?? new List<SpotifyAlbum>();
+    }
+
+    public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsPage(
+    string artistId, int offset, int limit)
+    {
+        await RefreshIfNeededAsync();
+
+        var url =
+            $"https://api.spotify.com/v1/artists/{artistId}/albums" +
+            $"?include_groups=album,single,compilation,appears_on" +
+            $"&limit={limit}&offset={offset}";
+
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        return JsonSerializer.Deserialize<SpotifyPaging<SpotifyAlbum>>(raw);
+    }
+
+    public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsByUrl(string url)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        return JsonSerializer.Deserialize<SpotifyPaging<SpotifyAlbum>>(raw);
+    }
 }

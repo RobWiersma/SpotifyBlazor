@@ -19,6 +19,7 @@ else
         @foreach (var t in LikedSongs.Items)
         {
             <li class="track-item">
+                
 
                 <div class="track-left">
                     <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"

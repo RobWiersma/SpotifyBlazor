@@ -29,41 +29,64 @@ else
         </div>
     </div>
 
-    @if (albums != null && albums.Any())
-{
-    <h3 class="mt-4 mb-3">Albums</h3>
+    @if (albumPage != null && albumPage.Items.Any())
+    {
+        <h3 class="mt-4 mb-3">Albums</h3>
 
         <div class="album-wrap">
-        @foreach (var album in albums)
-        {
-             var albumUrl = $"/album/{album.Id}?from=artist";
+            @foreach (var album in albumPage.Items)
+            {
+                var albumUrl = $"/album/{album.Id}?from=artist";
 
-            
-            <div class="album-item"
+                <div class="album-item"
                      @onclick="() => Navigation.NavigateTo(albumUrl)">
+                    <img src="@album.Images.FirstOrDefault()?.Url"
+                         alt="@album.Name"
+                         class="album-cover-small" />
 
-                <img src="@album.Images.FirstOrDefault()?.Url"
-                     alt="@album.Name"
-                     class="album-cover-small" />
+                    <div class="album-title">@album.Name</div>
+                    <div class="album-date">@album.ReleaseDate</div>
+                </div>
+            }
+        </div>
 
-                <div class="album-title">@album.Name</div>
-                <div class="album-date">@album.ReleaseDate</div>
-            </div>
-        }
-    </div>
-}
+        <div class="pagination-controls d-flex align-items-center gap-3 mt-3">
+
+            @if (albumPage.Previous != null)
+            {
+                <button class="btn btn-secondary"
+                        @onclick="LoadPreviousPage">
+                    Previous
+                </button>
+            }
+
+            @if (albumPage.Next != null)
+            {
+                <button class="btn btn-secondary"
+                        @onclick="LoadNextPage">
+                    Next
+                </button>
+            }
+
+            <span>
+                Page @(albumPage.Offset / albumPage.Limit + 1)
+                of @((int)Math.Ceiling((double)albumPage.Total / albumPage.Limit))
+            </span>
+        </div>
+    }
 }
 
 @code {
     [Parameter] public string ArtistId { get; set; }
 
     private SpotifyArtistFull? artist;
-    private List<SpotifyAlbum>? albums;
+    //private SpotifyPaging<SpotifyAlbum>? albums;
+    private SpotifyPaging<SpotifyAlbum>? albumPage;
 
     protected override async Task OnInitializedAsync()
     {
         artist = await Auth.GetArtistAsync(ArtistId);
-        albums = await Auth.GetAllArtistAlbums(ArtistId);
+        albumPage = await Auth.GetArtistAlbumsPage(ArtistId, 0, 10);
     }
 
     private async Task Play(string uri)
@@ -75,5 +98,17 @@ else
     {
         var ts = TimeSpan.FromMilliseconds(ms);
         return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+
+    private async Task LoadNextPage()
+    {
+        if (albumPage?.Next != null)
+            albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Next);
+    }
+
+    private async Task LoadPreviousPage()
+    {
+        if (albumPage?.Previous != null)
+            albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Previous);
     }
 }

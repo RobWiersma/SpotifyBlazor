@@ -27,11 +27,16 @@ else
     <ul class="list-group">
         @foreach (var track in album.Tracks.Items)
         {
-            <li class="album-track"
-                @onclick="() => Play(track.Uri)">
-                <span>@track.Name</span>
-                <span>@FormatTime(track.DurationMs)</span>
-            </li>
+            <div class="track-row" @onclick="() => Play(track.Uri)">
+                <img src="@album.Images.First().Url" class="track-art" />
+
+                <div class="track-info">
+                    <div class="track-title">@track.Name</div>
+                    <div class="track-artist">@string.Join(", ", track.Artists.Select(a => a.Name))</div>
+                </div>
+
+                <div class="track-duration">@FormatTime(track.DurationMs)</div>
+            </div>
         }
     </ul>
 }

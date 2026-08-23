@@ -247,6 +247,17 @@ a:hover {
     display: flex;
     gap: 12px;
     margin-bottom: 12px;
+    padding-left:12px;
+    padding-right:12px;
+}
+
+.track-item:hover {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    background-color: darkgrey;
+    padding-left:12px;
+    padding-right:12px;
 }
 
 .track-cover {
@@ -273,21 +284,60 @@ a:hover {
     padding: 8px 0;
 }
 
-    .track-duration {
-        width: 50px; /* fixed width keeps alignment perfect */
-        text-align: right; /* aligns numbers to the right edge */
-        opacity: 0.7;
-        font-size: 0.9rem;
-    }
+.track-duration {
+    width: 50px; /* fixed width keeps alignment perfect */
+    text-align: right; /* aligns numbers to the right edge */
+    opacity: 0.7;
+    font-size: 0.9rem;
+}
 
-    .track-info {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start; /* ensures artist + name align left */
-    }
+.track-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* ensures artist + name align left */
+}
 
-    .track-left {
-        display: flex;
-        align-items: center;
-        gap: 12px; /* spacing between album art and text */
-    }
+.track-left {
+    display: flex;
+    align-items: center;
+    gap: 12px; /* spacing between album art and text */
+}
+
+.track-row {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    cursor: pointer;
+}
+
+.track-row:hover {
+    background-color: darkgrey;
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 12px;
+}
+
+.track-art {
+    width: 50px;
+    height: 50px;
+    border-radius: 4px;
+    margin-right: 15px;
+}
+
+.track-info {
+    flex-grow: 1;
+}
+
+.track-title {
+    font-weight: bold;
+}
+
+.track-artist {
+    opacity: 0.7;
+}
+
+.track-duration {
+    width: 50px;
+    text-align: right;
+    opacity: 0.8;
+}

@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  api:
+    container_name: spotify_api
+    build:
+      context: .
+      dockerfile: SpotifyBlazor/Server/Dockerfile
+    ports:
+      - "5133:5133"   # HTTP
+      - "7151:7151"   # HTTPS
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_Kestrel__Certificates__Default__Path: "/https/docker-https.pfx"
+      ASPNETCORE_Kestrel__Certificates__Default__Password: "dockerpassword"
+
+  web:
+    container_name: spotify_web
+    build:
+      context: .
+      dockerfile: SpotifyBlazor/Client/Dockerfile
+    ports:
+      - "7151:7151"   # Client served on same port as VS
+    depends_on:
+      - api

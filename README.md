@@ -42,10 +42,6 @@ Features
 
 Quickstart Setup Guide
 1. Clone the repository
-bash
-
-git clone https://github.com/yourname/SpotifyBlazor.git
-cd SpotifyBlazor
 
 2. Create a Spotify Developer App
 

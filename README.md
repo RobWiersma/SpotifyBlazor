@@ -1,74 +1,189 @@
 https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
 
-Spotify Blazor Client
+SpotifyBlazor
 
-A simple web app that connects to the Spotify API and lets you browse artists, albums, and tracks.
-Built with C#, Blazor WebAssembly, and ASP.NET Core.
-What This Project Does
+SpotifyBlazor is a full‑stack .NET application built with Blazor WebAssembly (client) and ASP.NET Core (API). It integrates with the Spotify Web API using the Authorization Code flow to authenticate users, exchange authorization codes for access/refresh tokens, and retrieve user data such as liked songs, playlists, search results, and profile information.
 
-    Lets a user log in with their Spotify account
+The project runs entirely in Docker, using a multi‑container architecture with:
+```
+    Primary + backup API instances
 
-    Shows artists, albums, and track lists
+    Automatic failover
 
-    Displays album covers and artist info
+    Health checks
 
-    Lets you click an album to see its tracks
+    Self‑healing restart policies
 
-    Uses Spotify’s official API to load real music data
+    HTTPS‑enabled API containers
 
-Tech Used
+    Nginx‑served Blazor WASM client
+```
+This setup provides a production‑style environment locally, with reliability features typically found in orchestrators like Kubernetes.
+Features
+```
+    Blazor WebAssembly client served via Nginx
 
-    C# / .NET 8
+    ASP.NET Core API with minimal endpoints
 
-    Blazor WebAssembly (client‑side UI)
+    Spotify OAuth (authorization code flow)
 
-    ASP.NET Core (backend for Spotify login)
+    Token exchange + refresh
 
-    Spotify Web API
+    Shared models for tracks, albums, playlists, and user profile
 
-Why I Built It
+    Docker Compose multi‑container architecture
 
-I wanted to practice:
+    Automatic API failover using Docker DNS
 
-    Working with APIs
+    Health checks + restart policies for self‑healing
 
-    Building UI components in Blazor
+    HTTPS enabled for API containers using a PFX certificate
 
-    Handling OAuth login flows
+    Local development parity with Visual Studio ports
+```
+Quickstart Setup Guide
+1. Clone the repository
 
-    Structuring a clean .NET project
+2. Create a Spotify Developer App
 
-This project helped me sharpen my skills in modern .NET web development.
-How It Works (Simple Version)
+Go to:
+https://developer.spotify.com/dashboard
 
-    You log in with Spotify
+Set your redirect URI to:
+Code
+```
+http://localhost:7151/callback
+```
+3. Add your Spotify credentials
 
-    The app gets permission to load your music data
+Edit appsettings.json in the Server project:
+json
 
-    It shows artists, albums, and tracks
+```
+"ConnectionStrings": {
+  "clientId": "YOUR_SPOTIFY_CLIENT_ID",
+  "clientSecret": "YOUR_SPOTIFY_CLIENT_SECRET",
+  "callbackUri": "http://localhost:7151/callback"
+}
+```
 
-    You can click an album to view its songs
+These values are used by the /api/config, /api/spotify/exchange, and /api/spotify/refresh endpoints.
 
-Running the Project
+4. Export an HTTPS certificate for Docker
 
-You need:
+The API containers run HTTPS internally, so you must export a development certificate:
+bash
+```
+dotnet dev-certs https -ep ./docker-https.pfx -p dockerpassword
+```
+Place it here:
+Code
+```
+SpotifyBlazor/Server/docker-https.pfx
+```
+The API Dockerfile automatically loads this into Kestrel.
+5. Start the full Docker stack
+bash
+```
+docker compose up --build
+```
+This launches:
+```
+    api_primary
 
-    .NET 8
+    api_backup
 
-    A Spotify Developer account
+    web (Blazor client)
+```
+Each API container exposes /health for Docker’s self‑healing.
+6. Open the client
+Code
+```
+http://localhost:7151
+```
+Log in with Spotify and the app will begin loading your data.
+Technical Overview
+Client (Blazor WebAssembly)
 
-    A Client ID + Client Secret
+The client is a Blazor WASM app built and published via the .NET SDK, then served by Nginx inside a lightweight Alpine container. It communicates with the API using Docker DNS:
+```
+    http://api_primary:5133
 
-Then:
+    http://api_backup:5133
+```
+The client implements automatic failover by attempting requests against the primary API first, and falling back to the backup API if the primary becomes unhealthy.
+API (ASP.NET Core)
+
+The API exposes:
+```
+    GET /api/config – returns Spotify client ID + callback URI
+
+    POST /api/spotify/exchange – exchanges authorization code for tokens
+
+    POST /api/spotify/refresh – refreshes access tokens
+
+    GET /health – used by Docker health checks
+```
+The API runs both HTTP and HTTPS inside the container:
+```
+    HTTP: 5133
+
+    HTTPS: 7151
+```
+Kestrel loads the PFX certificate via environment variables set in the Dockerfile.
+Failover & Self‑Healing
+Health Checks
+
+Each API container exposes:
+Code
+```
+GET /health → "healthy"
+```
+Docker uses this to determine container health. If the endpoint fails:
+
+    Docker marks the container as unhealthy
+
+    Docker automatically restarts it
+
+    The Blazor client switches to the backup API
+
+Client‑Side Failover
+
+The client cycles through:
+
+    api_primary
+
+    api_backup
+
+If the primary API is down or unhealthy, the backup instance is used automatically.
+
+This provides zero‑downtime behavior even in local development.
+Project Structure
+Code
+
+Client/      → Blazor WebAssembly (Nginx)
+Server/      → ASP.NET Core API (Kestrel)
+Shared/      → Shared models for Spotify data
+docker-compose.yml
+
+Running Without Docker
+
+You can also run the project directly from Visual Studio or the .NET CLI:
 bash
 
-dotnet run --project Server
-dotnet run --project Client
+dotnet run --project SpotifyBlazor/Server
+dotnet run --project SpotifyBlazor/Client
 
-Notes
+However, this disables:
+```
+    Failover
 
-    The app requires Spotify login
+    Health checks
 
-    It only works for your own Spotify account
+    Self‑healing
+
+    Multi‑instance API cluster
+```
+Docker is the recommended environment.
 
     This project is for learning and showcasing .NET skills

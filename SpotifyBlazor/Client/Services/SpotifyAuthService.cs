@@ -10,6 +10,7 @@ public class SpotifyAuthService
 {
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
+    private readonly ILogger<SpotifyAuthService> _logger;
 
     public string? AccessToken { get; private set; }
     public string? RefreshToken { get; private set; }
@@ -23,17 +24,18 @@ public class SpotifyAuthService
 
     private const string StorageKey = "spotify_auth";
 
-    public SpotifyAuthService(HttpClient http, IJSRuntime js)
+    public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger)
     {
         _http = http;
         _js = js;
+        _logger = logger;
     }
 
     private readonly string[] _apiEndpoints = new[]
     {
-    "http://api_primary:5133",
-    "http://api_backup:5133"
-};
+        "http://api_primary:5133",
+        "http://api_backup:5133"
+    };
 
     public async Task<T> GetAsync<T>(string path)
     {
@@ -41,39 +43,71 @@ public class SpotifyAuthService
         {
             try
             {
+                _logger.LogInformation("Calling API {Endpoint}/{Path}", api, path);
+
+                var start = DateTime.UtcNow;
                 var result = await _http.GetFromJsonAsync<T>($"{api}/{path}");
+
+                _logger.LogInformation(
+                    "API {Endpoint}/{Path} succeeded in {ElapsedMs}ms",
+                    api,
+                    path,
+                    (DateTime.UtcNow - start).TotalMilliseconds
+                );
+
                 if (result != null)
                     return result;
             }
-            catch
+            catch (Exception ex)
             {
-                // try next API
+                _logger.LogWarning(
+                    ex,
+                    "API {Endpoint}/{Path} failed, trying next endpoint",
+                    api,
+                    path
+                );
             }
         }
 
+        _logger.LogError("All API endpoints failed for path {Path}", path);
         throw new Exception("All API endpoints failed.");
     }
 
     // Load tokens from localStorage on startup
     public async Task InitializeAsync()
     {
+        _logger.LogInformation("Loading tokens from localStorage");
+
         var json = await _js.InvokeAsync<string>("localStorage.getItem", StorageKey);
 
         if (string.IsNullOrEmpty(json))
+        {
+            _logger.LogInformation("No saved tokens found");
             return;
+        }
 
-        var saved = System.Text.Json.JsonSerializer.Deserialize<SavedAuth>(json);
+        var saved = JsonSerializer.Deserialize<SavedAuth>(json);
         if (saved is null)
+        {
+            _logger.LogWarning("Failed to deserialize saved auth tokens");
             return;
+        }
 
         AccessToken = saved.AccessToken;
         RefreshToken = saved.RefreshToken;
         ExpiresAt = saved.ExpiresAt;
+
+        _logger.LogInformation(
+            "Loaded tokens. HasAccessToken={HasToken} ExpiresAt={ExpiresAt}",
+            !string.IsNullOrEmpty(AccessToken),
+            ExpiresAt
+        );
     }
 
-    // Persist tokens to localStorage
     private async Task PersistAsync()
     {
+        _logger.LogInformation("Persisting tokens to localStorage");
+
         var saved = new SavedAuth
         {
             AccessToken = AccessToken,
@@ -81,45 +115,73 @@ public class SpotifyAuthService
             ExpiresAt = ExpiresAt
         };
 
-        var json = System.Text.Json.JsonSerializer.Serialize(saved);
+        var json = JsonSerializer.Serialize(saved);
         await _js.InvokeVoidAsync("localStorage.setItem", StorageKey, json);
     }
 
-    // Called once after initial login (after /api/spotify/exchange)
     public async Task SetInitialTokens(TokenResponseFull token)
     {
+        _logger.LogInformation(
+            "Setting initial tokens. ExpiresIn={ExpiresIn}",
+            token.expires_in
+        );
+
         AccessToken = token.access_token;
         RefreshToken = token.refresh_token;
         ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in);
 
         await PersistAsync();
-
         NotifyStateChanged();
     }
 
     public async Task<bool> RefreshIfNeededAsync()
     {
         if (string.IsNullOrEmpty(RefreshToken))
+        {
+            _logger.LogInformation("No refresh token available");
             return false;
+        }
 
         if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
+        {
+            _logger.LogInformation("Token still valid, skipping refresh");
             return false;
+        }
+
+        _logger.LogInformation("Refreshing Spotify access token");
+
+        var start = DateTime.UtcNow;
 
         var response = await _http.PostAsJsonAsync("/api/spotify/refresh",
             new RefreshRequest { RefreshToken = RefreshToken! });
 
+        _logger.LogInformation(
+            "Refresh response {StatusCode} after {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds
+        );
+
         if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Token refresh failed {StatusCode}", response.StatusCode);
             return false;
+        }
 
         var token = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
         if (token is null)
+        {
+            _logger.LogWarning("Token refresh returned null token");
             return false;
+        }
 
         AccessToken = token.access_token;
-
         RefreshToken = token.refresh_token ?? RefreshToken;
-
         ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in);
+
+        _logger.LogInformation(
+            "Token refreshed. ExpiresAt={ExpiresAt}",
+            ExpiresAt
+        );
 
         await PersistAsync();
         NotifyStateChanged();

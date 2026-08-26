@@ -2,34 +2,67 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
 using SpotifyBlazor.Client.Services;
 using SpotifyBlazor.Shared.Models;
-using static System.Net.WebRequestMethods;
+using Serilog;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.ApplicationInsights.Extensibility;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ---------------------------------------------------------
+// Application Insights + Serilog
+// ---------------------------------------------------------
+
+// Enable Application Insights telemetry
+builder.Services.AddApplicationInsightsTelemetry();
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.ApplicationInsights(
+        builder.Configuration["ApplicationInsights:ConnectionString"],
+        TelemetryConverter.Traces)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
+// ---------------------------------------------------------
+// Services
+// ---------------------------------------------------------
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient();
 
+// ---------------------------------------------------------
+// Build App
+// ---------------------------------------------------------
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ---------------------------------------------------------
+// Pipeline
+// ---------------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
 }
 else
 {
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
-// ---------------------------------------------------------
 // Apply CORS BEFORE endpoints
-// ---------------------------------------------------------
 app.UseCors("AllowLocalhost");
 
-app.MapGet("/api/config", (IConfiguration config) =>
+// ---------------------------------------------------------
+// Endpoints
+// ---------------------------------------------------------
+
+// Config endpoint
+app.MapGet("/api/config", (IConfiguration config, ILogger<Program> logger) =>
 {
+    logger.LogInformation("Serving /api/config");
+    Console.WriteLine("Manual log message: Application started.");
+
     return new
     {
         ClientId = config["ConnectionStrings:clientId"],
@@ -37,11 +70,15 @@ app.MapGet("/api/config", (IConfiguration config) =>
     };
 });
 
+// OAuth Exchange
 app.MapPost("/api/spotify/exchange", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
+    ILogger<Program> logger,
     [FromBody] ExchangeRequest req) =>
 {
+    logger.LogInformation("Starting OAuth code exchange {CodeLength}", req.Code?.Length);
+
     var http = httpFactory.CreateClient();
 
     var values = new Dictionary<string, string>
@@ -53,21 +90,43 @@ app.MapPost("/api/spotify/exchange", async (
         ["client_secret"] = config["ConnectionStrings:clientSecret"]
     };
 
-    var content = new FormUrlEncodedContent(values);
-    var response = await http.PostAsync("https://accounts.spotify.com/api/token", content);
+    logger.LogInformation("Sending OAuth exchange request to Spotify");
+
+    var start = DateTime.UtcNow;
+    var response = await http.PostAsync("https://accounts.spotify.com/api/token", new FormUrlEncodedContent(values));
+
+    logger.LogInformation(
+        "Spotify responded {StatusCode} after {ElapsedMs}ms",
+        response.StatusCode,
+        (DateTime.UtcNow - start).TotalMilliseconds
+    );
 
     if (!response.IsSuccessStatusCode)
+    {
+        logger.LogWarning("Spotify token exchange failed {StatusCode}", response.StatusCode);
         return Results.Problem("Spotify token exchange failed.");
+    }
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
+
+    logger.LogInformation(
+        "OAuth token received {TokenType} expires_in={ExpiresIn}",
+        json?.token_type,
+        json?.expires_in
+    );
+
     return Results.Ok(json);
 });
 
+// OAuth Refresh
 app.MapPost("/api/spotify/refresh", async (
     HttpClient http,
     IConfiguration config,
+    ILogger<Program> logger,
     RefreshRequest req) =>
 {
+    logger.LogInformation("Starting token refresh");
+
     var values = new Dictionary<string, string>
     {
         ["grant_type"] = "refresh_token",
@@ -76,15 +135,45 @@ app.MapPost("/api/spotify/refresh", async (
         ["client_secret"] = config["ConnectionStrings:clientSecret"]
     };
 
-    var content = new FormUrlEncodedContent(values);
-    var response = await http.PostAsync("https://accounts.spotify.com/api/token", content);
+    var start = DateTime.UtcNow;
+    var response = await http.PostAsync("https://accounts.spotify.com/api/token", new FormUrlEncodedContent(values));
+
+    logger.LogInformation(
+        "Refresh response {StatusCode} after {ElapsedMs}ms",
+        response.StatusCode,
+        (DateTime.UtcNow - start).TotalMilliseconds
+    );
+
+    response.EnsureSuccessStatusCode();
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
+
+    logger.LogInformation(
+        "Refresh completed {TokenType} expires_in={ExpiresIn}",
+        json?.token_type,
+        json?.expires_in
+    );
+
     return Results.Ok(json);
 });
 
-app.MapGet("/health", () => Results.Ok("healthy"));
+// Health check
+app.MapGet("/health", (ILogger<Program> logger) =>
+{
+    logger.LogInformation("Health check requested");
+    return Results.Ok("healthy");
+});
 
+// Log test endpoint
+app.MapGet("/api/logtest", (ILogger<Program> logger) =>
+{
+    logger.LogInformation("🔥 Test log endpoint hit at {TimeUtc}", DateTime.UtcNow);
+    return Results.Ok(new { message = "Log test executed" });
+});
+
+// ---------------------------------------------------------
+// Static + Routing
+// ---------------------------------------------------------
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

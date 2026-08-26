@@ -50,68 +50,70 @@ https://developer.spotify.com/dashboard
 
 Set your redirect URI to:
 Code
-
+```
 http://localhost:7151/callback
-
+```
 3. Add your Spotify credentials
 
 Edit appsettings.json in the Server project:
 json
 
+```
 "ConnectionStrings": {
   "clientId": "YOUR_SPOTIFY_CLIENT_ID",
   "clientSecret": "YOUR_SPOTIFY_CLIENT_SECRET",
   "callbackUri": "http://localhost:7151/callback"
 }
+```
 
 These values are used by the /api/config, /api/spotify/exchange, and /api/spotify/refresh endpoints.
 4. Export an HTTPS certificate for Docker
 
 The API containers run HTTPS internally, so you must export a development certificate:
 bash
-
+```
 dotnet dev-certs https -ep ./docker-https.pfx -p dockerpassword
-
+```
 Place it here:
 Code
-
+```
 SpotifyBlazor/Server/docker-https.pfx
-
+```
 The API Dockerfile automatically loads this into Kestrel.
 5. Start the full Docker stack
 bash
-
+```
 docker compose up --build
-
+```
 This launches:
-
+```
     api_primary
 
     api_backup
 
     web (Blazor client)
-
+```
 Each API container exposes /health for Docker’s self‑healing.
 6. Open the client
 Code
-
+```
 http://localhost:7151
-
+```
 Log in with Spotify and the app will begin loading your data.
 Technical Overview
 Client (Blazor WebAssembly)
 
 The client is a Blazor WASM app built and published via the .NET SDK, then served by Nginx inside a lightweight Alpine container. It communicates with the API using Docker DNS:
-
+```
     http://api_primary:5133
 
     http://api_backup:5133
-
+```
 The client implements automatic failover by attempting requests against the primary API first, and falling back to the backup API if the primary becomes unhealthy.
 API (ASP.NET Core)
 
 The API exposes:
-
+```
     GET /api/config – returns Spotify client ID + callback URI
 
     POST /api/spotify/exchange – exchanges authorization code for tokens
@@ -119,22 +121,22 @@ The API exposes:
     POST /api/spotify/refresh – refreshes access tokens
 
     GET /health – used by Docker health checks
-
+```
 The API runs both HTTP and HTTPS inside the container:
-
+```
     HTTP: 5133
 
     HTTPS: 7151
-
+```
 Kestrel loads the PFX certificate via environment variables set in the Dockerfile.
 Failover & Self‑Healing
 Health Checks
 
 Each API container exposes:
 Code
-
+```
 GET /health → "healthy"
-
+```
 Docker uses this to determine container health. If the endpoint fails:
 
     Docker marks the container as unhealthy
@@ -171,7 +173,7 @@ dotnet run --project SpotifyBlazor/Server
 dotnet run --project SpotifyBlazor/Client
 
 However, this disables:
-
+```
     Failover
 
     Health checks
@@ -179,7 +181,7 @@ However, this disables:
     Self‑healing
 
     Multi‑instance API cluster
-
+```
 Docker is the recommended environment.
 
     This project is for learning and showcasing .NET skills

@@ -1,4 +1,5 @@
 https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
+
 SpotifyBlazor
 
 SpotifyBlazor is a full‑stack .NET application built with Blazor WebAssembly (client) and ASP.NET Core (API). It integrates with the Spotify Web API using the Authorization Code flow to authenticate users, exchange authorization codes for access/refresh tokens, and retrieve user data such as liked songs, playlists, search results, and profile information.

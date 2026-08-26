@@ -67,6 +67,7 @@ json
 ```
 
 These values are used by the /api/config, /api/spotify/exchange, and /api/spotify/refresh endpoints.
+
 4. Export an HTTPS certificate for Docker
 
 The API containers run HTTPS internally, so you must export a development certificate:

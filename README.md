@@ -4,7 +4,7 @@ SpotifyBlazor
 SpotifyBlazor is a full‑stack .NET application built with Blazor WebAssembly (client) and ASP.NET Core (API). It integrates with the Spotify Web API using the Authorization Code flow to authenticate users, exchange authorization codes for access/refresh tokens, and retrieve user data such as liked songs, playlists, search results, and profile information.
 
 The project runs entirely in Docker, using a multi‑container architecture with:
-
+```
     Primary + backup API instances
 
     Automatic failover
@@ -16,10 +16,10 @@ The project runs entirely in Docker, using a multi‑container architecture with
     HTTPS‑enabled API containers
 
     Nginx‑served Blazor WASM client
-
+```
 This setup provides a production‑style environment locally, with reliability features typically found in orchestrators like Kubernetes.
 Features
-
+```
     Blazor WebAssembly client served via Nginx
 
     ASP.NET Core API with minimal endpoints
@@ -39,7 +39,7 @@ Features
     HTTPS enabled for API containers using a PFX certificate
 
     Local development parity with Visual Studio ports
-
+```
 Quickstart Setup Guide
 1. Clone the repository
 

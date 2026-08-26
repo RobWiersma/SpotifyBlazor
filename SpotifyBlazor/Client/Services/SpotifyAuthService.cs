@@ -29,6 +29,31 @@ public class SpotifyAuthService
         _js = js;
     }
 
+    private readonly string[] _apiEndpoints = new[]
+    {
+    "http://api_primary:5133",
+    "http://api_backup:5133"
+};
+
+    public async Task<T> GetAsync<T>(string path)
+    {
+        foreach (var api in _apiEndpoints)
+        {
+            try
+            {
+                var result = await _http.GetFromJsonAsync<T>($"{api}/{path}");
+                if (result != null)
+                    return result;
+            }
+            catch
+            {
+                // try next API
+            }
+        }
+
+        throw new Exception("All API endpoints failed.");
+    }
+
     // Load tokens from localStorage on startup
     public async Task InitializeAsync()
     {

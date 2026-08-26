@@ -83,6 +83,8 @@ app.MapPost("/api/spotify/refresh", async (
     return Results.Ok(json);
 });
 
+app.MapGet("/health", () => Results.Ok("healthy"));
+
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

@@ -1,18 +1,45 @@
 version: "3.9"
 
 services:
-  api:
-    container_name: spotify_api
+  api_primary:
+    container_name: spotify_api_primary
     build:
       context: .
       dockerfile: SpotifyBlazor/Server/Dockerfile
     ports:
-      - "5133:5133"   # HTTP
-      - "7151:7151"   # HTTPS
+      - "5133:5133"   # primary API exposed on host
+      - "7151:7151"   # primary HTTPS
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_Kestrel__Certificates__Default__Path: "/https/docker-https.pfx"
       ASPNETCORE_Kestrel__Certificates__Default__Password: "dockerpassword"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5133/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  api_backup:
+    container_name: spotify_api_backup
+    build:
+      context: .
+      dockerfile: SpotifyBlazor/Server/Dockerfile
+    ports:
+      - "5134:5133"   # backup API exposed on host
+      - "7152:7151"   # backup HTTPS
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_Kestrel__Certificates__Default__Path: "/https/docker-https.pfx"
+      ASPNETCORE_Kestrel__Certificates__Default__Password: "dockerpassword"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5133/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   web:
     container_name: spotify_web
@@ -20,6 +47,14 @@ services:
       context: .
       dockerfile: SpotifyBlazor/Client/Dockerfile
     ports:
-      - "7151:7151"   # Client served on same port as VS
+      - "7151:7151"
     depends_on:
-      - api
+      - api_primary
+      - api_backup
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7151"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

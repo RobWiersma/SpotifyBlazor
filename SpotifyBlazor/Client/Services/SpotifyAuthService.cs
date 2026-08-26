@@ -188,72 +188,82 @@ public class SpotifyAuthService
         return true;
     }
 
-    // Helper to call Spotify APIs with auto-refresh
     public async Task<HttpResponseMessage> SendSpotifyAsync(HttpRequestMessage req)
     {
+        _logger.LogInformation("SendSpotifyAsync: Preparing request {Method} {Url}",
+            req.Method, req.RequestUri);
+
         await RefreshIfNeededAsync();
 
         if (!string.IsNullOrEmpty(AccessToken))
         {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
+            _logger.LogInformation("SendSpotifyAsync: Adding Bearer token");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
         }
 
-        return await _http.SendAsync(req);
+        var start = DateTime.UtcNow;
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("SendSpotifyAsync: Response {StatusCode} in {ElapsedMs}ms",
+            res.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
+        return res;
     }
 
-    // Logout: clear tokens + localStorage
     public async Task LogoutAsync()
     {
+        _logger.LogInformation("LogoutAsync: Clearing tokens and localStorage");
+
         AccessToken = null;
         RefreshToken = null;
         ExpiresAt = DateTime.MinValue;
 
         await _js.InvokeVoidAsync("localStorage.removeItem", StorageKey);
 
+        _logger.LogInformation("LogoutAsync: Tokens cleared, notifying state change");
         NotifyStateChanged();
     }
 
-    // Get current user profile
     public async Task<SpotifyUserProfile?> GetUserProfileAsync()
     {
+        _logger.LogInformation("GetUserProfileAsync: Fetching user profile");
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
             "https://api.spotify.com/v1/me");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("GetUserProfileAsync: Response {StatusCode}", res.StatusCode);
+
         if (!res.IsSuccessStatusCode)
             return null;
 
         return await res.Content.ReadFromJsonAsync<SpotifyUserProfile>();
     }
 
-    // Get now playing
     public async Task<SpotifyNowPlaying?> GetNowPlayingAsync()
     {
+        _logger.LogInformation("GetNowPlayingAsync: Fetching now playing");
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
             "https://api.spotify.com/v1/me/player/currently-playing");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
-        if (!res.IsSuccessStatusCode)
-            return null;
 
-        if (res.StatusCode == System.Net.HttpStatusCode.NoContent)
+        _logger.LogInformation("GetNowPlayingAsync: Response {StatusCode}", res.StatusCode);
+
+        if (!res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.NoContent)
             return null;
 
         return await res.Content.ReadFromJsonAsync<SpotifyNowPlaying>();
@@ -261,135 +271,132 @@ public class SpotifyAuthService
 
     public async Task SkipToNextAsync()
     {
+        _logger.LogInformation("SkipToNextAsync: Skipping to next track");
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Post,
             "https://api.spotify.com/v1/me/player/next");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        await _http.SendAsync(req);
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("SkipToNextAsync: Response {StatusCode}", res.StatusCode);
     }
 
     public async Task SkipToPreviousAsync()
     {
+        _logger.LogInformation("SkipToPreviousAsync: Skipping to previous track");
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Post,
             "https://api.spotify.com/v1/me/player/previous");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        await _http.SendAsync(req);
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("SkipToPreviousAsync: Response {StatusCode}", res.StatusCode);
     }
 
     public async Task PauseAsync()
     {
+        _logger.LogInformation("PauseAsync: Pausing playback");
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/pause");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        await _http.SendAsync(req);
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("PauseAsync: Response {StatusCode}", res.StatusCode);
     }
 
     public async Task PlayAsync()
     {
+        _logger.LogInformation("PlayAsync: Resuming playback");
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/play");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        await _http.SendAsync(req);
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("PlayAsync: Response {StatusCode}", res.StatusCode);
     }
 
     public async Task PlayTrackAsync(string trackUri)
     {
+        _logger.LogInformation("PlayTrackAsync: Playing track {TrackUri}", trackUri);
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/play")
         {
-            Content = JsonContent.Create(new
-            {
-                uris = new[] { trackUri }
-            })
+            Content = JsonContent.Create(new { uris = new[] { trackUri } })
         };
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        await _http.SendAsync(req);
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("PlayTrackAsync: Response {StatusCode}", res.StatusCode);
 
         NotifyPlaybackChanged();
     }
 
-    // DTO for localStorage
-    private class SavedAuth
-    {
-        public string? AccessToken { get; set; }
-        public string? RefreshToken { get; set; }
-        public DateTime ExpiresAt { get; set; }
-    }
-
     public async Task<SpotifyLikedSongs?> GetLikedSongsAsync(int offset = 0, int limit = 50)
     {
+        _logger.LogInformation("GetLikedSongsAsync: Fetching liked songs offset={Offset} limit={Limit}",
+            offset, limit);
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
             $"https://api.spotify.com/v1/me/tracks?limit={limit}&offset={offset}");
 
         if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("GetLikedSongsAsync: Response {StatusCode}", res.StatusCode);
+
         if (!res.IsSuccessStatusCode)
             return null;
 
-        var test = res.Content.ReadAsStringAsync();
-
-
         return await res.Content.ReadFromJsonAsync<SpotifyLikedSongs>();
-
     }
 
     public async Task<SpotifyAlbum> GetAlbumAsync(string albumId)
     {
+        _logger.LogInformation("GetAlbumAsync: Fetching album {AlbumId}", albumId);
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
             $"https://api.spotify.com/v1/albums/{albumId}");
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("GetAlbumAsync: Response {StatusCode}", res.StatusCode);
+
         res.EnsureSuccessStatusCode();
 
         var json = await res.Content.ReadAsStringAsync();
@@ -398,51 +405,39 @@ public class SpotifyAuthService
 
     public async Task<SpotifyArtistFull?> GetArtistAsync(string artistId)
     {
+        _logger.LogInformation("GetArtistAsync: Fetching artist {ArtistId}", artistId);
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
             $"https://api.spotify.com/v1/artists/{artistId}?market=US");
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("GetArtistAsync: Response {StatusCode}", res.StatusCode);
+
         if (!res.IsSuccessStatusCode)
             return null;
-
-        var test = await res.Content.ReadAsStringAsync();
 
         return await res.Content.ReadFromJsonAsync<SpotifyArtistFull>();
     }
 
-    public async Task<List<SpotifyTrack>> GetArtistTopTracksByPopularityAsync(string artistId)
-    {
-        await RefreshIfNeededAsync();
 
-        // 1. Get all albums for the artist
-        var albums = await GetArtistAlbumsAsync(artistId);
-        var tracks = new List<SpotifyTrack>();
 
-        // 2. Fetch tracks for each album
-        foreach (var album in albums.Items)
-        {
-            var albumTracks = await GetAlbumTracksAsync(album.Id);
-            if (albumTracks?.Items != null)
-                tracks.AddRange(albumTracks.Items);
-        }
 
-        // 3. Sort by popularity (descending)
-        return tracks
-            .OrderBy(t => t.Name)
-            .Take(10)
-            .ToList();
-    }
+
+    // All updated SpotifyAuthService methods with logging
 
     public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsAsync(
-    string artistId,
-    int limit = 20,
-    int offset = 0)
+        string artistId,
+        int limit = 20,
+        int offset = 0)
     {
+        _logger.LogInformation("GetArtistAlbumsAsync: artistId={ArtistId}, limit={Limit}, offset={Offset}",
+            artistId, limit, offset);
+
         await RefreshIfNeededAsync();
 
         var url =
@@ -450,34 +445,47 @@ public class SpotifyAuthService
             $"?include_groups=album,single,compilation,appears_on" +
             $"&limit={limit}&offset={offset}";
 
-        var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        _logger.LogInformation("GetArtistAlbumsAsync: GET {Url}", url);
 
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var start = DateTime.UtcNow;
         var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("GetArtistAlbumsAsync: Response {StatusCode} in {ElapsedMs}ms",
+            res.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
 
         if (!res.IsSuccessStatusCode)
         {
             var body = await res.Content.ReadAsStringAsync();
-            Console.WriteLine("Spotify Error: " + body);
+            _logger.LogWarning("GetArtistAlbumsAsync: Spotify error body={Body}", body);
             return null;
         }
 
         return await res.Content.ReadFromJsonAsync<SpotifyPaging<SpotifyAlbum>>();
     }
 
-
     public async Task<SpotifyPaging<SpotifyTrack>> GetAlbumTracksAsync(string albumId)
     {
+        _logger.LogInformation("GetAlbumTracksAsync: albumId={AlbumId}", albumId);
+
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Get,
-            $"https://api.spotify.com/v1/albums/{albumId}/tracks?limit=50");
+        var url = $"https://api.spotify.com/v1/albums/{albumId}/tracks?limit=50";
+        _logger.LogInformation("GetAlbumTracksAsync: GET {Url}", url);
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var res = await _http.SendAsync(req);
+
+        _logger.LogInformation("GetAlbumTracksAsync: Response {StatusCode} in {ElapsedMs}ms",
+            res.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
         if (!res.IsSuccessStatusCode)
             return new SpotifyPaging<SpotifyTrack>();
 
@@ -486,42 +494,59 @@ public class SpotifyAuthService
 
     public async Task<List<SpotifyAlbum>> GetAllArtistAlbums(string artistId)
     {
+        _logger.LogInformation("GetAllArtistAlbums: artistId={ArtistId}", artistId);
+
         var albums = new List<SpotifyAlbum>();
         int limit = 10;
         int offset = 0;
 
         while (true)
         {
+            _logger.LogInformation("GetAllArtistAlbums: Fetching page offset={Offset}", offset);
+
             var page = await GetArtistAlbumsAsync(artistId, limit, offset);
 
             if (page?.Items == null || page.Items.Count == 0)
+            {
+                _logger.LogInformation("GetAllArtistAlbums: No more items, stopping");
                 break;
+            }
 
             albums.AddRange(page.Items);
 
             offset += limit;
 
             if (page.Items.Count < limit)
+            {
+                _logger.LogInformation("GetAllArtistAlbums: Last page reached");
                 break;
+            }
         }
 
+        _logger.LogInformation("GetAllArtistAlbums: Total albums={Count}", albums.Count);
         return albums;
     }
 
     public async Task<List<SearchResult>> SearchAsync(string query)
     {
+        _logger.LogInformation("SearchAsync: query={Query}", query);
+
         var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track,artist,album&limit=10";
+        _logger.LogInformation("SearchAsync: GET {Url}", url);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(request);
+
+        _logger.LogInformation("SearchAsync: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        var result = json.ToString();
-
         var results = new List<SearchResult>();
 
         // Tracks
@@ -577,63 +602,73 @@ public class SpotifyAuthService
             }
         }
 
+        _logger.LogInformation("SearchAsync: Total results={Count}", results.Count);
         return results;
     }
 
     public async Task<SpotifyPlaylistResponse> GetUserPlaylistsAsync()
     {
+        _logger.LogInformation("GetUserPlaylistsAsync: Fetching playlists");
+
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(
-            HttpMethod.Get,
-            "https://api.spotify.com/v1/me/playlists"
-        );
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            "https://api.spotify.com/v1/me/playlists");
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(req);
 
-        var json = await response.Content.ReadAsStringAsync();
+        _logger.LogInformation("GetUserPlaylistsAsync: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
 
-        var result = JsonSerializer.Deserialize<SpotifyPlaylistResponse>(json);
-
-        return result;
+        var raw = await response.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<SpotifyPlaylistResponse>(raw);
     }
 
     public async Task<SpotifyPlaylist> GetPlaylistAsync(string playlistId)
     {
+        _logger.LogInformation("GetPlaylistAsync: playlistId={PlaylistId}", playlistId);
+
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"https://api.spotify.com/v1/playlists/{playlistId}"
-        );
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/playlists/{playlistId}");
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(req);
-        var raw = await response.Content.ReadAsStringAsync();
 
+        _logger.LogInformation("GetPlaylistAsync: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
+        var raw = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<SpotifyPlaylist>(raw);
     }
 
     public async Task<List<PlaylistTrackItem>> GetPlaylistTracksAsync(string playlistId)
     {
+        _logger.LogInformation("GetPlaylistTracksAsync: playlistId={PlaylistId}", playlistId);
+
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"https://api.spotify.com/v1/playlists/{playlistId}/items"
-        );
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/playlists/{playlistId}/items");
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(req);
-        var raw = await response.Content.ReadAsStringAsync();
 
+        _logger.LogInformation("GetPlaylistTracksAsync: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
+        var raw = await response.Content.ReadAsStringAsync();
         var result = JsonSerializer.Deserialize<PlaylistTrackResponse>(raw);
 
         return result.Items;
@@ -641,6 +676,8 @@ public class SpotifyAuthService
 
     public async Task<List<SpotifyAlbum>> GetArtistAlbumsFirstPage(string artistId)
     {
+        _logger.LogInformation("GetArtistAlbumsFirstPage: artistId={ArtistId}", artistId);
+
         await RefreshIfNeededAsync();
 
         var limit = 10;
@@ -651,22 +688,30 @@ public class SpotifyAuthService
             $"?include_groups=album,single,compilation,appears_on" +
             $"&limit={limit}&offset={offset}";
 
+        _logger.LogInformation("GetArtistAlbumsFirstPage: GET {Url}", url);
+
         var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
-
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(req);
-        var raw = await response.Content.ReadAsStringAsync();
 
+        _logger.LogInformation("GetArtistAlbumsFirstPage: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
+        var raw = await response.Content.ReadAsStringAsync();
         var page = JsonSerializer.Deserialize<SpotifyPaging<SpotifyAlbum>>(raw);
 
         return page?.Items ?? new List<SpotifyAlbum>();
     }
 
     public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsPage(
-    string artistId, int offset, int limit)
+        string artistId, int offset, int limit)
     {
+        _logger.LogInformation("GetArtistAlbumsPage: artistId={ArtistId}, offset={Offset}, limit={Limit}",
+            artistId, offset, limit);
+
         await RefreshIfNeededAsync();
 
         var url =
@@ -674,27 +719,40 @@ public class SpotifyAuthService
             $"?include_groups=album,single,compilation,appears_on" +
             $"&limit={limit}&offset={offset}";
 
+        _logger.LogInformation("GetArtistAlbumsPage: GET {Url}", url);
+
         var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(req);
-        var raw = await response.Content.ReadAsStringAsync();
 
+        _logger.LogInformation("GetArtistAlbumsPage: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
+        var raw = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<SpotifyPaging<SpotifyAlbum>>(raw);
     }
 
     public async Task<SpotifyPaging<SpotifyAlbum>> GetArtistAlbumsByUrl(string url)
     {
+        _logger.LogInformation("GetArtistAlbumsByUrl: GET {Url}", url);
+
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
+        var start = DateTime.UtcNow;
         var response = await _http.SendAsync(req);
-        var raw = await response.Content.ReadAsStringAsync();
 
+        _logger.LogInformation("GetArtistAlbumsByUrl: Response {StatusCode} in {ElapsedMs}ms",
+            response.StatusCode,
+            (DateTime.UtcNow - start).TotalMilliseconds);
+
+        var raw = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<SpotifyPaging<SpotifyAlbum>>(raw);
     }
+
 }

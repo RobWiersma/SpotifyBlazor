@@ -22,6 +22,8 @@ public class SpotifyAuthService
     public event Action? OnPlaybackChanged;
     private void NotifyPlaybackChanged() => OnPlaybackChanged?.Invoke();
 
+    public string ApiJwt { get; private set; }
+
     private const string StorageKey = "spotify_auth";
 
     public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger)
@@ -73,7 +75,6 @@ public class SpotifyAuthService
         throw new Exception("All API endpoints failed.");
     }
 
-    // Load tokens from localStorage on startup
     public async Task InitializeAsync()
     {
         _logger.LogInformation("Loading tokens from localStorage");
@@ -86,7 +87,7 @@ public class SpotifyAuthService
             return;
         }
 
-        var saved = JsonSerializer.Deserialize<SavedAuth>(json);
+        var saved = JsonSerializer.Deserialize<SavedAuthLocal>(json);
         if (saved is null)
         {
             _logger.LogWarning("Failed to deserialize saved auth tokens");
@@ -96,13 +97,29 @@ public class SpotifyAuthService
         AccessToken = saved.AccessToken;
         RefreshToken = saved.RefreshToken;
         ExpiresAt = saved.ExpiresAt;
+        ApiJwt = saved.ApiJwt;
 
         _logger.LogInformation(
-            "Loaded tokens. HasAccessToken={HasToken} ExpiresAt={ExpiresAt}",
+            "Loaded tokens. HasAccessToken={HasToken} ExpiresAt={ExpiresAt} HasApiJwt={HasJwt}",
             !string.IsNullOrEmpty(AccessToken),
-            ExpiresAt
+            ExpiresAt,
+            !string.IsNullOrEmpty(ApiJwt)
         );
+
+        // Restore API JWT into HttpClient if present
+        if (!string.IsNullOrEmpty(ApiJwt))
+        {
+            _http.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", ApiJwt);
+
+            _logger.LogInformation("Restored API JWT into HttpClient");
+        }
+        else
+        {
+            _logger.LogInformation("No API JWT found to restore");
+        }
     }
+
 
     private async Task PersistAsync()
     {
@@ -121,72 +138,152 @@ public class SpotifyAuthService
 
     public async Task SetInitialTokens(TokenResponseFull token)
     {
-        _logger.LogInformation(
-            "Setting initial tokens. ExpiresIn={ExpiresIn}",
-            token.expires_in
-        );
+        _logger.LogInformation("Setting initial Spotify tokens");
 
+        // Store Spotify tokens
         AccessToken = token.access_token;
         RefreshToken = token.refresh_token;
         ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in);
 
+        _logger.LogInformation(
+            "Spotify tokens set. HasAccessToken={HasToken} ExpiresAt={ExpiresAt}",
+            !string.IsNullOrEmpty(AccessToken),
+            ExpiresAt
+        );
+
+        // ---------------------------------------------------------
+        // Exchange Spotify token for your API JWT
+        // ---------------------------------------------------------
+        _logger.LogInformation("Exchanging Spotify token for API JWT");
+
+        var resp = await _http.PostAsJsonAsync("/api/auth/spotify-login",
+            new { SpotifyAccessToken = AccessToken });
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "API JWT exchange failed StatusCode={StatusCode}",
+                resp.StatusCode
+            );
+            throw new Exception("Failed to exchange Spotify token for API JWT.");
+        }
+
+        var jwtResponse = await resp.Content.ReadFromJsonAsync<ApiJwtResponseLocal>();
+        ApiJwt = jwtResponse?.access_token;
+
+        if (string.IsNullOrEmpty(ApiJwt))
+        {
+            _logger.LogWarning("API JWT was null or empty after exchange");
+            throw new Exception("API JWT missing after exchange.");
+        }
+
+        _logger.LogInformation("API JWT received and stored");
+
+        // Restore JWT into HttpClient
+        _http.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", ApiJwt);
+
+        _logger.LogInformation("API JWT applied to HttpClient");
+
+        // ---------------------------------------------------------
+        // Persist everything
+        // ---------------------------------------------------------
         await PersistAsync();
-        NotifyStateChanged();
+
+        _logger.LogInformation("All tokens persisted to localStorage");
     }
+
 
     public async Task<bool> RefreshIfNeededAsync()
     {
+        _logger.LogInformation("Checking if Spotify token needs refresh");
+
         if (string.IsNullOrEmpty(RefreshToken))
         {
-            _logger.LogInformation("No refresh token available");
+            _logger.LogWarning("No refresh token available");
             return false;
         }
 
+        // Token still valid?
         if (DateTime.UtcNow < ExpiresAt.AddSeconds(-60))
         {
             _logger.LogInformation("Token still valid, skipping refresh");
             return false;
         }
 
-        _logger.LogInformation("Refreshing Spotify access token");
-
-        var start = DateTime.UtcNow;
+        _logger.LogInformation("Refreshing Spotify token");
 
         var response = await _http.PostAsJsonAsync("/api/spotify/refresh",
-            new RefreshRequest { RefreshToken = RefreshToken! });
-
-        _logger.LogInformation(
-            "Refresh response {StatusCode} after {ElapsedMs}ms",
-            response.StatusCode,
-            (DateTime.UtcNow - start).TotalMilliseconds
-        );
+            new RefreshRequest { RefreshToken = RefreshToken });
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Token refresh failed {StatusCode}", response.StatusCode);
+            _logger.LogWarning(
+                "Spotify refresh failed StatusCode={StatusCode}",
+                response.StatusCode
+            );
             return false;
         }
 
         var token = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
         if (token is null)
         {
-            _logger.LogWarning("Token refresh returned null token");
+            _logger.LogWarning("Spotify refresh returned null token");
             return false;
         }
 
         AccessToken = token.access_token;
-        RefreshToken = token.refresh_token ?? RefreshToken;
         ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in);
 
         _logger.LogInformation(
-            "Token refreshed. ExpiresAt={ExpiresAt}",
+            "Spotify token refreshed. NewExpiresAt={ExpiresAt}",
             ExpiresAt
         );
 
+        // ---------------------------------------------------------
+        // Refresh API JWT using the new Spotify access token
+        // ---------------------------------------------------------
+        _logger.LogInformation("Refreshing API JWT");
+
+        var jwtResp = await _http.PostAsJsonAsync("/api/auth/spotify-login",
+            new { SpotifyAccessToken = AccessToken });
+
+        if (!jwtResp.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "API JWT refresh failed StatusCode={StatusCode}",
+                jwtResp.StatusCode
+            );
+            return false;
+        }
+
+        var jwt = await jwtResp.Content.ReadFromJsonAsync<ApiJwtResponseLocal>();
+        ApiJwt = jwt?.access_token;
+
+        if (string.IsNullOrEmpty(ApiJwt))
+        {
+            _logger.LogWarning("API JWT was null or empty after refresh");
+            return false;
+        }
+
+        _logger.LogInformation("API JWT refreshed successfully");
+
+        // Apply JWT to HttpClient
+        _http.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", ApiJwt);
+
+        _logger.LogInformation("API JWT applied to HttpClient");
+
+        // ---------------------------------------------------------
+        // Persist everything
+        // ---------------------------------------------------------
         await PersistAsync();
-        NotifyStateChanged();
+
+        _logger.LogInformation("Tokens persisted after refresh");
+
         return true;
     }
+
 
     public async Task<HttpResponseMessage> SendSpotifyAsync(HttpRequestMessage req)
     {

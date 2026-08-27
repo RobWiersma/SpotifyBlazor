@@ -1,5 +1,11 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
 using SpotifyBlazor.Shared.Models;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,9 +31,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowLocalhost", policy =>
     {
         policy
-            .WithOrigins(
-                "https://localhost:xxxx"
-            )
+            .WithOrigins("https://localhost:xxxx")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -40,6 +44,33 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient();
+
+// ---------------------------------------------------------
+// JWT Authentication
+// ---------------------------------------------------------
+
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // ---------------------------------------------------------
 // Build App
@@ -68,9 +99,11 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseCors("AllowLocalhost");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // ---------------------------------------------------------
-// Endpoints
+// Public Endpoints (NO AUTH)
 // ---------------------------------------------------------
 
 app.MapGet("/api/config", (
@@ -92,9 +125,7 @@ app.MapPost("/api/spotify/exchange", async (
     ILogger<Program> logger,
     [FromBody] ExchangeRequest req) =>
 {
-    logger.LogInformation(
-        "Starting OAuth code exchange {CodeLength}",
-        req.Code?.Length);
+    logger.LogInformation("Starting OAuth code exchange {CodeLength}", req.Code?.Length);
 
     var http = httpFactory.CreateClient();
 
@@ -106,8 +137,6 @@ app.MapPost("/api/spotify/exchange", async (
         ["client_id"] = config["ConnectionStrings:clientId"],
         ["client_secret"] = config["ConnectionStrings:clientSecret"]
     };
-
-    logger.LogInformation("Sending OAuth exchange request to Spotify");
 
     var start = DateTime.UtcNow;
 
@@ -122,15 +151,11 @@ app.MapPost("/api/spotify/exchange", async (
 
     if (!response.IsSuccessStatusCode)
     {
-        logger.LogWarning(
-            "Spotify token exchange failed {StatusCode}",
-            response.StatusCode);
-
+        logger.LogWarning("Spotify token exchange failed {StatusCode}", response.StatusCode);
         return Results.Problem("Spotify token exchange failed.");
     }
 
-    var json = await response.Content
-        .ReadFromJsonAsync<TokenResponseFull>();
+    var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
 
     logger.LogInformation(
         "OAuth token received {TokenType} expires_in={ExpiresIn}",
@@ -171,8 +196,7 @@ app.MapPost("/api/spotify/refresh", async (
 
     response.EnsureSuccessStatusCode();
 
-    var json = await response.Content
-        .ReadFromJsonAsync<TokenResponseFull>();
+    var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
 
     logger.LogInformation(
         "Refresh completed {TokenType} expires_in={ExpiresIn}",
@@ -185,18 +209,64 @@ app.MapPost("/api/spotify/refresh", async (
 app.MapGet("/health", (ILogger<Program> logger) =>
 {
     logger.LogInformation("Health check requested");
-
     return Results.Ok("healthy");
 });
 
+// ---------------------------------------------------------
+// Protected Endpoints (JWT REQUIRED)
+// ---------------------------------------------------------
+
+app.MapPost("/api/auth/spotify-login", async (
+    IConfiguration config,
+    IHttpClientFactory httpFactory,
+    ILogger<Program> logger,
+    [FromBody] SpotifyLoginRequest req) =>
+{
+    logger.LogInformation("Validating Spotify access token");
+
+    var http = httpFactory.CreateClient();
+    http.DefaultRequestHeaders.Authorization =
+        new AuthenticationHeaderValue("Bearer", req.SpotifyAccessToken);
+
+    var me = await http.GetFromJsonAsync<SpotifyMe>("https://api.spotify.com/v1/me");
+
+    if (me is null)
+    {
+        logger.LogWarning("Spotify token invalid");
+        return Results.Unauthorized();
+    }
+
+    logger.LogInformation("Spotify identity validated for {UserId}", me.Id);
+
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+    var claims = new[]
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, me.Id),
+        new Claim("spotify_name", me.DisplayName ?? ""),
+        new Claim("spotify_uri", me.Uri ?? "")
+    };
+
+    var token = new JwtSecurityToken(
+        issuer: config["Jwt:Issuer"],
+        audience: config["Jwt:Audience"],
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(2),
+        signingCredentials: creds);
+
+    var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+
+    return Results.Ok(new { access_token = jwt });
+})
+.RequireAuthorization();
+
 app.MapGet("/api/logtest", (ILogger<Program> logger) =>
 {
-    logger.LogInformation(
-        "TEST APPLICATION INSIGHTS LOG {TimeUtc}",
-        DateTime.UtcNow);
-
+    logger.LogInformation("TEST APPLICATION INSIGHTS LOG {TimeUtc}", DateTime.UtcNow);
     return Results.Ok(new { message = "Log test executed" });
-});
+})
+.RequireAuthorization();
 
 // ---------------------------------------------------------
 // Endpoints

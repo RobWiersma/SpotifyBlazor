@@ -645,4 +645,26 @@ namespace SpotifyBlazor.Shared.Models
         public string? RefreshToken { get; set; }
         public DateTime ExpiresAt { get; set; }
     }
+
+    public record SpotifyLoginRequest(string SpotifyAccessToken);
+
+    public class SpotifyMe
+    {
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
+        public string Uri { get; set; }
+    }
+
+    public class SavedAuthLocal
+    {
+        public string AccessToken { get; set; }
+        public string RefreshToken { get; set; }
+        public DateTime ExpiresAt { get; set; }
+        public string ApiJwt { get; set; }
+    }
+
+    public class ApiJwtResponseLocal
+    {
+        public string access_token { get; set; }
+    }
 }

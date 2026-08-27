@@ -284,6 +284,56 @@ public class SpotifyAuthService
         return true;
     }
 
+    public async Task SendClientLogAsync(
+        string level,
+        string message,
+        string? context = null,
+        string? page = null,
+        string? component = null,
+        string? action = null,
+        double? durationMs = null)
+    {
+        _logger.LogInformation(
+            "Sending client telemetry Level={Level} Message={Message}",
+            level,
+            message
+        );
+
+        var evt = new TelemetryEvent(
+            level,
+            message,
+            context,
+            DateTime.UtcNow.ToString("o"),   // clientTime
+            "1.0.0",                         // clientVersion (you can wire this to your build)
+            page,
+            component,
+            action,
+            durationMs
+        );
+
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/telemetry", evt);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Telemetry send failed StatusCode={StatusCode}",
+                    resp.StatusCode
+                );
+            }
+            else
+            {
+                _logger.LogInformation("Telemetry sent successfully");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending telemetry");
+        }
+    }
+
+
 
     public async Task<HttpResponseMessage> SendSpotifyAsync(HttpRequestMessage req)
     {

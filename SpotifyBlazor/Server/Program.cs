@@ -1,54 +1,37 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
-using SpotifyBlazor.Shared.Models;
+using Microsoft.ApplicationInsights;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
+using SpotifyBlazor.Shared.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------
 // Application Insights
 // ---------------------------------------------------------
-
 builder.Services.AddApplicationInsightsTelemetry();
-
 builder.Logging.AddApplicationInsights();
-
-builder.Logging.AddFilter<
-    Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
-    "",
-    LogLevel.Information);
+builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
+    "", LogLevel.Information);
 
 // ---------------------------------------------------------
-// CORS
+// MVC + Razor + Controllers
 // ---------------------------------------------------------
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowLocalhost", policy =>
-    {
-        policy
-            .WithOrigins("https://localhost:xxxx")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-});
-
-// ---------------------------------------------------------
-// MVC + Razor + HttpClient
-// ---------------------------------------------------------
-
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
+
+// ---------------------------------------------------------
+// HttpClient factory
+// ---------------------------------------------------------
 builder.Services.AddHttpClient();
 
 // ---------------------------------------------------------
 // JWT Authentication
 // ---------------------------------------------------------
-
 var jwtKey = builder.Configuration["Jwt:Key"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
@@ -73,15 +56,13 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // ---------------------------------------------------------
-// Build App
+// Build app
 // ---------------------------------------------------------
-
 var app = builder.Build();
 
 // ---------------------------------------------------------
 // Pipeline
 // ---------------------------------------------------------
-
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
@@ -92,26 +73,21 @@ else
 }
 
 app.UseHttpsRedirection();
-
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseCors("AllowLocalhost");
 app.UseAuthentication();
 app.UseAuthorization();
 
 // ---------------------------------------------------------
-// Public Endpoints (NO AUTH)
+// PUBLIC ENDPOINTS (NO AUTH)
 // ---------------------------------------------------------
 
-app.MapGet("/api/config", (
-    IConfiguration config,
-    ILogger<Program> logger) =>
+// Client config
+app.MapGet("/api/config", (IConfiguration config) =>
 {
-    logger.LogInformation("Serving /api/config");
-
     return new
     {
         ClientId = config["ConnectionStrings:clientId"],
@@ -119,14 +95,13 @@ app.MapGet("/api/config", (
     };
 });
 
+// Spotify OAuth exchange
 app.MapPost("/api/spotify/exchange", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
-    ILogger<Program> logger,
-    [FromBody] ExchangeRequest req) =>
+    [FromBody] ExchangeRequest req,
+    ILogger<Program> logger) =>
 {
-    logger.LogInformation("Starting OAuth code exchange {CodeLength}", req.Code?.Length);
-
     var http = httpFactory.CreateClient();
 
     var values = new Dictionary<string, string>
@@ -138,41 +113,23 @@ app.MapPost("/api/spotify/exchange", async (
         ["client_secret"] = config["ConnectionStrings:clientSecret"]
     };
 
-    var start = DateTime.UtcNow;
-
     var response = await http.PostAsync(
         "https://accounts.spotify.com/api/token",
         new FormUrlEncodedContent(values));
 
-    logger.LogInformation(
-        "Spotify responded {StatusCode} after {ElapsedMs}ms",
-        response.StatusCode,
-        (DateTime.UtcNow - start).TotalMilliseconds);
-
     if (!response.IsSuccessStatusCode)
-    {
-        logger.LogWarning("Spotify token exchange failed {StatusCode}", response.StatusCode);
         return Results.Problem("Spotify token exchange failed.");
-    }
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
-
-    logger.LogInformation(
-        "OAuth token received {TokenType} expires_in={ExpiresIn}",
-        json?.token_type,
-        json?.expires_in);
-
     return Results.Ok(json);
 });
 
+// Spotify refresh
 app.MapPost("/api/spotify/refresh", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
-    ILogger<Program> logger,
     RefreshRequest req) =>
 {
-    logger.LogInformation("Starting token refresh");
-
     var http = httpFactory.CreateClient();
 
     var values = new Dictionary<string, string>
@@ -183,47 +140,28 @@ app.MapPost("/api/spotify/refresh", async (
         ["client_secret"] = config["ConnectionStrings:clientSecret"]
     };
 
-    var start = DateTime.UtcNow;
-
     var response = await http.PostAsync(
         "https://accounts.spotify.com/api/token",
         new FormUrlEncodedContent(values));
 
-    logger.LogInformation(
-        "Refresh response {StatusCode} after {ElapsedMs}ms",
-        response.StatusCode,
-        (DateTime.UtcNow - start).TotalMilliseconds);
-
     response.EnsureSuccessStatusCode();
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
-
-    logger.LogInformation(
-        "Refresh completed {TokenType} expires_in={ExpiresIn}",
-        json?.token_type,
-        json?.expires_in);
-
     return Results.Ok(json);
 });
 
-app.MapGet("/health", (ILogger<Program> logger) =>
-{
-    logger.LogInformation("Health check requested");
-    return Results.Ok("healthy");
-});
+// Health check
+app.MapGet("/health", () => Results.Ok("healthy"));
 
 // ---------------------------------------------------------
-// Protected Endpoints (JWT REQUIRED)
+// JWT MINTING ENDPOINT (PUBLIC)
 // ---------------------------------------------------------
-
 app.MapPost("/api/auth/spotify-login", async (
     IConfiguration config,
     IHttpClientFactory httpFactory,
-    ILogger<Program> logger,
-    [FromBody] SpotifyLoginRequest req) =>
+    [FromBody] SpotifyLoginRequest req,
+    ILogger<Program> logger) =>
 {
-    logger.LogInformation("Validating Spotify access token");
-
     var http = httpFactory.CreateClient();
     http.DefaultRequestHeaders.Authorization =
         new AuthenticationHeaderValue("Bearer", req.SpotifyAccessToken);
@@ -231,12 +169,7 @@ app.MapPost("/api/auth/spotify-login", async (
     var me = await http.GetFromJsonAsync<SpotifyMe>("https://api.spotify.com/v1/me");
 
     if (me is null)
-    {
-        logger.LogWarning("Spotify token invalid");
         return Results.Unauthorized();
-    }
-
-    logger.LogInformation("Spotify identity validated for {UserId}", me.Id);
 
     var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
     var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -258,22 +191,72 @@ app.MapPost("/api/auth/spotify-login", async (
     var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
     return Results.Ok(new { access_token = jwt });
-})
-.RequireAuthorization();
+});
 
-app.MapGet("/api/logtest", (ILogger<Program> logger) =>
+// ---------------------------------------------------------
+// PROTECTED ENDPOINTS (JWT REQUIRED)
+// ---------------------------------------------------------
+
+// Log test
+app.MapGet("/api/logtest", () =>
 {
-    logger.LogInformation("TEST APPLICATION INSIGHTS LOG {TimeUtc}", DateTime.UtcNow);
     return Results.Ok(new { message = "Log test executed" });
 })
 .RequireAuthorization();
 
-// ---------------------------------------------------------
-// Endpoints
-// ---------------------------------------------------------
+// Telemetry
+app.MapPost("/api/telemetry", async (
+    TelemetryEvent evt,
+    ClaimsPrincipal user,
+    TelemetryClient telemetry) =>
+{
+    var userId =
+        user.FindFirstValue(ClaimTypes.NameIdentifier) ??
+        user.FindFirstValue(JwtRegisteredClaimNames.Sub) ??
+        "unknown";
 
+    var props = new Dictionary<string, string>
+    {
+        ["userId"] = userId,
+        ["level"] = evt.Level,
+        ["context"] = evt.Context ?? "",
+        ["clientTime"] = evt.ClientTime ?? "",
+        ["clientVersion"] = evt.ClientVersion ?? "",
+        ["clientPage"] = evt.Page ?? "",
+        ["clientComponent"] = evt.Component ?? "",
+        ["clientAction"] = evt.Action ?? ""
+    };
+
+    var metrics = new Dictionary<string, double>();
+    if (evt.DurationMs.HasValue)
+        metrics["durationMs"] = evt.DurationMs.Value;
+
+    telemetry.TrackEvent(evt.Message, props, metrics);
+
+    return Results.Accepted();
+})
+.RequireAuthorization();
+
+// ---------------------------------------------------------
+// FINAL ENDPOINT MAPPINGS
+// ---------------------------------------------------------
 app.MapRazorPages();
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+// ---------------------------------------------------------
+// DTO (if not already in Shared)
+// ---------------------------------------------------------
+public record TelemetryEvent(
+    string Level,
+    string Message,
+    string? Context,
+    string? ClientTime,
+    string? ClientVersion,
+    string? Page,
+    string? Component,
+    string? Action,
+    double? DurationMs
+);

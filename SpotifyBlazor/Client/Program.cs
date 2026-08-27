@@ -16,6 +16,7 @@ builder.Services.AddScoped(sp =>
 // Client-side services
 builder.Services.AddScoped<ConfigService>();
 builder.Services.AddScoped<SpotifyAuthService>();
+builder.Services.AddScoped<TelemetryService>();
 
 var host = builder.Build();
 

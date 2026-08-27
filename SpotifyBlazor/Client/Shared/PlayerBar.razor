@@ -1,6 +1,8 @@
 ﻿@using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Services
 @inject SpotifyAuthService Auth
+@inject TelemetryService Telemetry
+@inject NavigationManager NavigationManager
 
 <div class="playerbar d-flex align-items-center gap-3 px-3 py-2">
 
@@ -52,7 +54,6 @@
     {
         if (!string.IsNullOrEmpty(Auth.AccessToken))
         {
-            //nowPlaying = await Auth.GetNowPlayingAsync();
             await LoadNowPlaying();
             _ = RefreshLoop();
         }
@@ -64,11 +65,9 @@
         };
     }
 
-    
     private double ProgressPercent => nowPlaying == null || nowPlaying.Item == null
         ? 0
         : (double)nowPlaying.ProgressMs / nowPlaying.Item.DurationMs * 100;
-    
 
     private async Task RefreshLoop()
     {
@@ -76,9 +75,8 @@
 
         while (true)
         {
-            await Task.Delay(1000); // UI updates every second
+            await Task.Delay(1000);
 
-            // Every 10 seconds, refresh from Spotify API
             apiRefreshCounter++;
             if (apiRefreshCounter >= 10)
             {
@@ -87,13 +85,7 @@
             }
             else if (nowPlaying?.IsPlaying == true)
             {
-                // Locally advance progress
                 nowPlaying.ProgressMs += 1000;
-
-
-                // Clamp to duration
-                //if (nowPlaying.ProgressMs > nowPlaying.Item.DurationMs)
-                    //nowPlaying.ProgressMs = nowPlaying.Item.DurationMs;
             }
 
             StateHasChanged();
@@ -111,40 +103,81 @@
         return $"{ts.Minutes}:{ts.Seconds:D2}";
     }
 
-    private async Task NextTrack()
+    // ---------------------------------------------------------
+    // TELEMETRY + PLAYER CONTROLS
+    // ---------------------------------------------------------
+
+    private async Task PrevTrack()
     {
-        await Auth.SkipToNextAsync();
-
-        // Wait for Spotify to update the now playing info
-        await Task.Delay(300);
-
-        // Retry a few times until the new track is available
-        for (int i = 0; i < 5; i++)
-        {
-            await LoadNowPlaying();
-
-            if (nowPlaying?.IsPlaying == true)
-                break;
-
-            await Task.Delay(200);
-        }
+        await Telemetry.TrackTimedAsync(
+            "Info",
+            "PlayerBar.PrevTrack",
+            async () =>
+            {
+                await Auth.SkipToPreviousAsync();
+                await LoadNowPlaying();
+            },
+            context: "User pressed previous track",
+            page: NavigationManager.Uri,
+            component: nameof(PlayerBar),
+            actionName: "PrevTrack"
+        );
 
         StateHasChanged();
     }
 
-    private async Task PrevTrack()
+    private async Task NextTrack()
     {
-        await Auth.SkipToPreviousAsync();
-        await LoadNowPlaying();
+        await Telemetry.TrackTimedAsync(
+            "Info",
+            "PlayerBar.NextTrack",
+            async () =>
+            {
+                await Auth.SkipToNextAsync();
+
+                await Task.Delay(300);
+
+                for (int i = 0; i < 5; i++)
+                {
+                    await LoadNowPlaying();
+
+                    if (nowPlaying?.IsPlaying == true)
+                        break;
+
+                    await Task.Delay(200);
+                }
+            },
+            context: "User pressed next track",
+            page: NavigationManager.Uri,
+            component: nameof(PlayerBar),
+            actionName: "NextTrack"
+        );
+
+        StateHasChanged();
     }
 
     private async Task TogglePlayPause()
     {
-        if (nowPlaying?.IsPlaying == true)
-            await Auth.PauseAsync();
-        else
-            await Auth.PlayAsync();
+        var isPlaying = nowPlaying?.IsPlaying == true;
 
-        await LoadNowPlaying();
+        await Telemetry.TrackTimedAsync(
+            "Info",
+            isPlaying ? "PlayerBar.Pause" : "PlayerBar.Play",
+            async () =>
+            {
+                if (isPlaying)
+                    await Auth.PauseAsync();
+                else
+                    await Auth.PlayAsync();
+
+                await LoadNowPlaying();
+            },
+            context: isPlaying ? "User paused playback" : "User started playback",
+            page: NavigationManager.Uri,
+            component: nameof(PlayerBar),
+            actionName: isPlaying ? "Pause" : "Play"
+        );
+
+        StateHasChanged();
     }
 }

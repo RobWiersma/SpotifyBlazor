@@ -124,7 +124,7 @@ app.MapPost("/api/spotify/exchange", async (
     return Results.Ok(json);
 });
 
-// Spotify refresh
+// Spotify refresh (Spotify tokens only)
 app.MapPost("/api/spotify/refresh", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
@@ -190,7 +190,10 @@ app.MapPost("/api/auth/spotify-login", async (
 
     var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-    return Results.Ok(new { access_token = jwt });
+    Console.WriteLine($"SERVER DIAGNOSTIC: Returning JWT={jwt}");
+
+    // IMPORTANT: return a clear JWT property name that the client expects
+    return Results.Ok(new { jwt });
 });
 
 // ---------------------------------------------------------
@@ -246,17 +249,3 @@ app.MapFallbackToFile("index.html");
 
 app.Run();
 
-// ---------------------------------------------------------
-// DTO (if not already in Shared)
-// ---------------------------------------------------------
-public record TelemetryEvent(
-    string Level,
-    string Message,
-    string? Context,
-    string? ClientTime,
-    string? ClientVersion,
-    string? Page,
-    string? Component,
-    string? Action,
-    double? DurationMs
-);

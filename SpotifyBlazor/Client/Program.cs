@@ -9,9 +9,14 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// HttpClient for calling the Server API
-builder.Services.AddScoped(sp =>
-    new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+builder.Services.AddScoped<HttpClient>(sp =>
+{
+    var client = new HttpClient
+    {
+        BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
+    };
+    return client;
+});
 
 // Client-side services
 builder.Services.AddScoped<ConfigService>();
@@ -27,6 +32,7 @@ await config.LoadAsync();
 // Hydrate SpotifyAuthService BEFORE rendering UI
 var auth = host.Services.GetRequiredService<SpotifyAuthService>();
 await auth.InitializeAsync();
+
 
 // Run the WASM app
 await host.RunAsync();

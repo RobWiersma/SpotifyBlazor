@@ -646,7 +646,10 @@ namespace SpotifyBlazor.Shared.Models
         public DateTime ExpiresAt { get; set; }
     }
 
-    public record SpotifyLoginRequest(string SpotifyAccessToken);
+    public class SpotifyLoginRequest
+    {
+        public string SpotifyAccessToken { get; set; } = "";
+    }
 
     public class SpotifyMe
     {

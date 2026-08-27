@@ -14,10 +14,12 @@ public class TelemetryService
     {
         _http = http;
         _logger = logger;
+
+        _logger.LogWarning("DIAGNOSTIC: TelemetryService  HttpClient hash = {Hash}", _http.GetHashCode());
     }
 
     // ---------------------------------------------------------
-    // Core telemetry send
+    // Core telemetry send (diagnostic)
     // ---------------------------------------------------------
     public async Task TrackAsync(
         string level,
@@ -28,18 +30,16 @@ public class TelemetryService
         string? action = null,
         double? durationMs = null)
     {
-        _logger.LogInformation(
-            "Sending telemetry Level={Level} Message={Message}",
-            level,
-            message
-        );
+        // 🔍 DIAGNOSTIC: Log Authorization header BEFORE sending
+        var authHeader = _http.DefaultRequestHeaders.Authorization?.ToString();
+        _logger.LogWarning("DIAGNOSTIC: HttpClient Authorization header = {Auth}", authHeader ?? "<null>");
 
         var evt = new TelemetryEvent(
             level,
             message,
             context,
-            DateTime.UtcNow.ToString("o"),   // clientTime
-            "1.0.0",                         // clientVersion
+            DateTime.UtcNow.ToString("o"),
+            "1.0.0",
             page,
             component,
             action,
@@ -52,10 +52,15 @@ public class TelemetryService
 
             if (!resp.IsSuccessStatusCode)
             {
-                _logger.LogWarning(
-                    "Telemetry send failed StatusCode={StatusCode}",
-                    resp.StatusCode
+                _logger.LogError(
+                    "Telemetry FAILED StatusCode={StatusCode} AuthHeader={Auth}",
+                    resp.StatusCode,
+                    authHeader ?? "<null>"
                 );
+            }
+            else
+            {
+                _logger.LogInformation("Telemetry SUCCESS");
             }
         }
         catch (Exception ex)
@@ -65,7 +70,7 @@ public class TelemetryService
     }
 
     // ---------------------------------------------------------
-    // Convenience: Track a timed operation
+    // Timed telemetry
     // ---------------------------------------------------------
     public async Task TrackTimedAsync(
         string level,

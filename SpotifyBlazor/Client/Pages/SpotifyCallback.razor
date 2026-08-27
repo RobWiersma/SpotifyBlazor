@@ -1,4 +1,5 @@
 ﻿@page "/spotcallback"
+@using System.Text.Json
 @using SpotifyBlazor.Client.Services
 @using SpotifyBlazor.Shared.Models
 @inject NavigationManager Nav
@@ -6,7 +7,7 @@
 @inject SpotifyAuthService Auth
 @inject IJSRuntime JS
 
-<h3>Spotify Callback (Debug Mode)</h3>
+<h3>Spotify Callback</h3>
 
 @if (!string.IsNullOrEmpty(Code))
 {
@@ -18,7 +19,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         Console.WriteLine("Callback URL: " + uri);
 
@@ -33,31 +33,47 @@
             return;
         }
 
-        Console.WriteLine("Sending code to server...");
-        var response = await Http.PostAsJsonAsync("/api/spotify/exchange", new { Code });
+        // 1. Exchange authorization code for Spotify tokens
+        Console.WriteLine("Exchanging code for Spotify tokens...");
+        var tokenResponse = await Http.PostAsJsonAsync("/api/spotify/exchange", new { Code });
 
-        if (!response.IsSuccessStatusCode)
+        if (!tokenResponse.IsSuccessStatusCode)
         {
-            Console.WriteLine("Token exchange failed.");
+            Console.WriteLine("Spotify token exchange failed.");
             return;
         }
 
-        var token = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
+        var token = await tokenResponse.Content.ReadFromJsonAsync<TokenResponseFull>();
 
         Console.WriteLine("Access Token: " + token?.access_token);
         Console.WriteLine("Refresh Token: " + token?.refresh_token);
 
+        // Save Spotify tokens into AuthService + localStorage
         await Auth.SetInitialTokens(token);
 
-        //await JS.InvokeVoidAsync("localStorage.setItem", "spotify_auth",
-        //    System.Text.Json.JsonSerializer.Serialize(new
-        //    {
-        //        AccessToken = token.access_token,
-        //        RefreshToken = token.refresh_token,
-        //       ExpiresAt = DateTime.UtcNow.AddSeconds(token.expires_in)
-        //    }));
+        // 2. Exchange Spotify access token for API JWT
+        Console.WriteLine("Exchanging Spotify access token for API JWT...");
+        var jwtResponse = await Http.PostAsJsonAsync("/api/auth/spotify-login",
+            new SpotifyLoginRequest { SpotifyAccessToken = token!.access_token });
 
-        // Optional redirect
+        if (!jwtResponse.IsSuccessStatusCode)
+        {
+            Console.WriteLine("API JWT exchange failed.");
+            return;
+        }
+
+        var jwtJson = await jwtResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var jwt = jwtJson.GetProperty("jwt").GetString();
+
+        Console.WriteLine("API JWT: " + jwt);
+
+        // 3. Apply JWT to HttpClient
+        Auth.ApplyJwt(jwt);
+
+        // 4. Save JWT to localStorage
+        await JS.InvokeVoidAsync("localStorage.setItem", "api_jwt", jwt);
+
+        // 5. Redirect home
         Nav.NavigateTo("/");
     }
 }

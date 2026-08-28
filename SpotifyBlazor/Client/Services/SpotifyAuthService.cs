@@ -37,8 +37,7 @@ public class SpotifyAuthService
 
     private readonly string[] _apiEndpoints = new[]
     {
-        "http://api_primary:5133",
-        "http://api_backup:5133"
+        "https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net"
     };
 
     public async Task<T> GetAsync<T>(string path)

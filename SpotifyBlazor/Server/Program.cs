@@ -1,11 +1,14 @@
+using Microsoft.ApplicationInsights;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.ApplicationInsights;
+using Serilog.Core;
+using SpotifyBlazor.Shared.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
-using SpotifyBlazor.Shared.Models;
+using System.Text.Json;
+using static System.Net.WebRequestMethods;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,9 +47,28 @@ builder.Services
         };
     });
 
+var loggerFactory = LoggerFactory.Create(logging =>
+{
+    logging.AddConsole();
+    logging.AddDebug();
+});
+
+
+
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+var startupLogger = app.Services
+    .GetRequiredService<ILogger<Program>>();
+
+startupLogger.LogWarning(
+    "ENV CHECK → Issuer={Issuer}, Audience={Audience}, KeyLength={KeyLength}, ASPNETCORE_ENVIRONMENT={Env}",
+    jwtIssuer,
+    jwtAudience,
+    jwtKey?.Length,
+    app.Environment.EnvironmentName
+);
 
 // Hosted Blazor WASM pipeline
 if (app.Environment.IsDevelopment())
@@ -81,13 +103,16 @@ app.MapGet("/api/config", (IConfiguration config) =>
 });
 
 app.MapPost("/api/spotify/exchange", async (
-    IHttpClientFactory httpFactory,
     IConfiguration config,
-    ExchangeRequest req) =>
+    IHttpClientFactory httpFactory,
+    ExchangeRequest req,
+    ILogger<Program> logger) =>
 {
+    logger.LogWarning("EXCHANGE → Starting Spotify code exchange");
+
     var http = httpFactory.CreateClient();
 
-    var values = new Dictionary<string, string>
+    var form = new Dictionary<string, string>
     {
         ["grant_type"] = "authorization_code",
         ["code"] = req.Code,
@@ -98,14 +123,19 @@ app.MapPost("/api/spotify/exchange", async (
 
     var response = await http.PostAsync(
         "https://accounts.spotify.com/api/token",
-        new FormUrlEncodedContent(values));
+        new FormUrlEncodedContent(form));
+
+    var raw = await response.Content.ReadAsStringAsync();
+    logger.LogWarning("EXCHANGE RAW RESPONSE → {Raw}", raw);
 
     if (!response.IsSuccessStatusCode)
-        return Results.Problem("Spotify token exchange failed.");
+        return Results.Problem("Spotify token exchange failed");
 
-    var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
-    return Results.Ok(json);
+    var token = JsonSerializer.Deserialize<TokenResponseFull>(raw);
+
+    return Results.Ok(token);
 });
+
 
 app.MapPost("/api/spotify/refresh", async (
     IHttpClientFactory httpFactory,
@@ -132,21 +162,39 @@ app.MapPost("/api/spotify/refresh", async (
     return Results.Ok(json);
 });
 
-// JWT minting
 app.MapPost("/api/auth/spotify-login", async (
     IConfiguration config,
     IHttpClientFactory httpFactory,
-    SpotifyLoginRequest req) =>
+    SpotifyLoginRequest req,
+    ILogger<Program> logger) =>
 {
+    logger.LogWarning("JWT MINT → Starting mint with access token length {Len}",
+        req.SpotifyAccessToken?.Length);
+
     var http = httpFactory.CreateClient();
     http.DefaultRequestHeaders.Authorization =
         new AuthenticationHeaderValue("Bearer", req.SpotifyAccessToken);
 
-    var me = await http.GetFromJsonAsync<SpotifyMe>("https://api.spotify.com/v1/me");
+    SpotifyMe? me = null;
+
+    try
+    {
+        me = await http.GetFromJsonAsync<SpotifyMe>("https://api.spotify.com/v1/me");
+        logger.LogWarning("JWT MINT → Spotify /me result: {Me}", me);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "JWT MINT → Spotify /me call failed");
+        return Results.Problem("Spotify /me failed");
+    }
 
     if (me is null)
+    {
+        logger.LogWarning("JWT MINT → Spotify /me returned null");
         return Results.Unauthorized();
+    }
 
+    // Mint JWT
     var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
     var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -165,6 +213,8 @@ app.MapPost("/api/auth/spotify-login", async (
         signingCredentials: creds);
 
     var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+
+    logger.LogWarning("JWT MINT → Successfully minted JWT length {Len}", jwt.Length);
 
     return Results.Ok(new { jwt });
 });
@@ -204,6 +254,17 @@ app.MapPost("/api/telemetry", async (
     return Results.Accepted();
 })
 .RequireAuthorization();
+
+app.MapGet("/env", (IConfiguration config) =>
+{
+    return new
+    {
+        Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+        JwtAudience = config["Jwt:Audience"],
+        JwtIssuer = config["Jwt:Issuer"],
+        JwtKeyLen = config["Jwt:Key"]?.Length
+    };
+});
 
 // Hosted Blazor WASM fallback
 app.MapRazorPages();

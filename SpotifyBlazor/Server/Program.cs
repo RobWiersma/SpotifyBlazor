@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.ApplicationInsights;
 using System.IdentityModel.Tokens.Jwt;
@@ -10,28 +9,20 @@ using SpotifyBlazor.Shared.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---------------------------------------------------------
 // Application Insights
-// ---------------------------------------------------------
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Logging.AddApplicationInsights();
 builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
     "", LogLevel.Information);
 
-// ---------------------------------------------------------
 // MVC + Razor + Controllers
-// ---------------------------------------------------------
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
 
-// ---------------------------------------------------------
 // HttpClient factory
-// ---------------------------------------------------------
 builder.Services.AddHttpClient();
 
-// ---------------------------------------------------------
 // JWT Authentication
-// ---------------------------------------------------------
 var jwtKey = builder.Configuration["Jwt:Key"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
@@ -55,14 +46,9 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-// ---------------------------------------------------------
-// Build app
-// ---------------------------------------------------------
 var app = builder.Build();
 
-// ---------------------------------------------------------
-// Pipeline
-// ---------------------------------------------------------
+// Hosted Blazor WASM pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
@@ -73,19 +59,18 @@ else
 }
 
 app.UseHttpsRedirection();
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
+app.UseBlazorFrameworkFiles();   // ⭐ Serve Client WASM
+app.UseStaticFiles();            // ⭐ Serve Client static assets
 
 app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ---------------------------------------------------------
-// PUBLIC ENDPOINTS (NO AUTH)
-// ---------------------------------------------------------
+// -----------------------------
+// PUBLIC ENDPOINTS
+// -----------------------------
 
-// Client config
 app.MapGet("/api/config", (IConfiguration config) =>
 {
     return new
@@ -95,12 +80,10 @@ app.MapGet("/api/config", (IConfiguration config) =>
     };
 });
 
-// Spotify OAuth exchange
 app.MapPost("/api/spotify/exchange", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
-    [FromBody] ExchangeRequest req,
-    ILogger<Program> logger) =>
+    ExchangeRequest req) =>
 {
     var http = httpFactory.CreateClient();
 
@@ -124,7 +107,6 @@ app.MapPost("/api/spotify/exchange", async (
     return Results.Ok(json);
 });
 
-// Spotify refresh (Spotify tokens only)
 app.MapPost("/api/spotify/refresh", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
@@ -150,17 +132,11 @@ app.MapPost("/api/spotify/refresh", async (
     return Results.Ok(json);
 });
 
-// Health check
-app.MapGet("/health", () => Results.Ok("healthy"));
-
-// ---------------------------------------------------------
-// JWT MINTING ENDPOINT (PUBLIC)
-// ---------------------------------------------------------
+// JWT minting
 app.MapPost("/api/auth/spotify-login", async (
     IConfiguration config,
     IHttpClientFactory httpFactory,
-    [FromBody] SpotifyLoginRequest req,
-    ILogger<Program> logger) =>
+    SpotifyLoginRequest req) =>
 {
     var http = httpFactory.CreateClient();
     http.DefaultRequestHeaders.Authorization =
@@ -190,24 +166,13 @@ app.MapPost("/api/auth/spotify-login", async (
 
     var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-    Console.WriteLine($"SERVER DIAGNOSTIC: Returning JWT={jwt}");
-
-    // IMPORTANT: return a clear JWT property name that the client expects
     return Results.Ok(new { jwt });
 });
 
-// ---------------------------------------------------------
-// PROTECTED ENDPOINTS (JWT REQUIRED)
-// ---------------------------------------------------------
+// Protected endpoints
+app.MapGet("/api/logtest", () => Results.Ok("Log test executed"))
+   .RequireAuthorization();
 
-// Log test
-app.MapGet("/api/logtest", () =>
-{
-    return Results.Ok(new { message = "Log test executed" });
-})
-.RequireAuthorization();
-
-// Telemetry
 app.MapPost("/api/telemetry", async (
     TelemetryEvent evt,
     ClaimsPrincipal user,
@@ -240,12 +205,9 @@ app.MapPost("/api/telemetry", async (
 })
 .RequireAuthorization();
 
-// ---------------------------------------------------------
-// FINAL ENDPOINT MAPPINGS
-// ---------------------------------------------------------
+// Hosted Blazor WASM fallback
 app.MapRazorPages();
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 app.Run();
-

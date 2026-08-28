@@ -174,8 +174,11 @@ public class SpotifyAuthService
             throw new Exception("Failed to exchange Spotify token for API JWT.");
         }
 
+        var raw = await resp.Content.ReadAsStringAsync();
+        _logger.LogWarning("RAW JWT RESPONSE: {Raw}", raw);
+
         var jwtResponse = await resp.Content.ReadFromJsonAsync<ApiJwtResponseLocal>();
-        ApiJwt = jwtResponse?.access_token;
+        ApiJwt = jwtResponse?.jwt;
 
         if (string.IsNullOrEmpty(ApiJwt))
         {

@@ -262,7 +262,10 @@ app.MapGet("/env", (IConfiguration config) =>
         Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
         JwtAudience = config["Jwt:Audience"],
         JwtIssuer = config["Jwt:Issuer"],
-        JwtKeyLen = config["Jwt:Key"]?.Length
+        JwtKeyLen = config["Jwt:Key"]?.Length,
+        ConnStringsClientId = config["ConnectionStrings:clientId"],
+        //ConnStringsClientSecret = config["ConnectionStrings:clientSecret"],
+        ConnStringsCallbackUri = config["ConnectionStrings:callbackUri"]
     };
 });
 

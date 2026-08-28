@@ -668,7 +668,7 @@ namespace SpotifyBlazor.Shared.Models
 
     public class ApiJwtResponseLocal
     {
-        public string access_token { get; set; }
+        public string jwt { get; set; }
     }
 
     public record TelemetryEvent(string Level, string Message, string? Context, string? ClientTime, string? ClientVersion, string? Page, string? Component, string? Action, double? DurationMs);

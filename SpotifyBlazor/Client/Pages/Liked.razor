@@ -2,6 +2,8 @@
 @inject SpotifyAuthService Auth
 @using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Services
+@inject TelemetryService Telemetry
+@inject NavigationManager Nav
 
 <h2 class="mb-3">Liked Songs</h2>
 
@@ -19,19 +21,18 @@ else
         @foreach (var t in LikedSongs.Items)
         {
             <li class="track-item">
-                
 
                 <div class="track-left">
                     <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
                          class="track-cover"
                          style="cursor:pointer"
-                         @onclick="@(() => Nav.NavigateTo($"/album/{t.Track?.Album?.Id}"))" />
+                         @onclick="@(() => OnAlbumClicked(t.Track))" />
 
                     <div class="track-info">
 
                         <div class="track-name"
                              style="cursor:pointer"
-                             @onclick="@(() => Play(t.Track?.Uri))">
+                             @onclick="@(() => PlayTrack(t.Track))">
                             @t.Track?.Name
                         </div>
 
@@ -40,7 +41,7 @@ else
                             {
                                 <span class="artist-link"
                                       style="cursor:pointer; text-decoration:underline;"
-                                      @onclick="@(() => Nav.NavigateTo($"/artist/{artist.Id}"))">
+                                      @onclick="@(() => OnArtistClicked(artist))">
                                     @artist.Name
                                 </span>
 
@@ -76,6 +77,16 @@ else
     protected override async Task OnInitializedAsync()
     {
         await LoadLikedSongs();
+
+        // 🔥 TELEMETRY: Liked Songs page loaded
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: "Liked Songs page loaded",
+            context: $"Offset: {_offset}, Limit: {_limit}",
+            page: "LikedSongsPage",
+            component: "LikedSongsList",
+            action: "PageLoaded"
+        );
     }
 
     private async Task LoadLikedSongs()
@@ -87,34 +98,84 @@ else
     {
         _offset += _limit;
         await LoadLikedSongs();
+
+        // 🔥 TELEMETRY: Next page
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: "Liked Songs: Next page",
+            context: $"Offset: {_offset}",
+            page: "LikedSongsPage",
+            component: "Pagination",
+            action: "NextPage"
+        );
     }
 
     private async Task PrevPage()
     {
         _offset -= _limit;
         if (_offset < 0) _offset = 0;
+
         await LoadLikedSongs();
+
+        // 🔥 TELEMETRY: Previous page
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: "Liked Songs: Previous page",
+            context: $"Offset: {_offset}",
+            page: "LikedSongsPage",
+            component: "Pagination",
+            action: "PreviousPage"
+        );
+    }
+
+    private async Task PlayTrack(SpotifyTrack track)
+    {
+        // 🔥 TELEMETRY: Track played
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Track played: {track?.Name}",
+            context: $"Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
+            page: "LikedSongsPage",
+            component: "TrackList",
+            action: "TrackPlayed"
+        );
+
+        await Auth.PlayTrackAsync(track.Uri);
+    }
+
+    private async Task OnAlbumClicked(SpotifyTrack track)
+    {
+        // 🔥 TELEMETRY: Album clicked
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Album clicked: {track?.Album?.Name}",
+            context: $"Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
+            page: "LikedSongsPage",
+            component: "AlbumLink",
+            action: "AlbumClicked"
+        );
+
+        Nav.NavigateTo($"/album/{track?.Album?.Id}");
+    }
+
+    private async Task OnArtistClicked(SpotifyArtist artist)
+    {
+        // 🔥 TELEMETRY: Artist clicked
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Artist clicked: {artist?.Name}",
+            context: null,
+            page: "LikedSongsPage",
+            component: "ArtistLink",
+            action: "ArtistClicked"
+        );
+
+        Nav.NavigateTo($"/artist/{artist.Id}");
     }
 
     private string FormatDuration(int ms)
     {
         var ts = TimeSpan.FromMilliseconds(ms);
         return $"{ts.Minutes}:{ts.Seconds:D2}";
-    }
-
-    private async Task Play(string uri)
-    {
-        await Auth.PlayTrackAsync(uri);
-    }
-
-    [Inject] NavigationManager Nav { get; set; }
-    private void GoToAlbum(string albumId)
-    {
-        Nav.NavigateTo($"/album/{albumId}");
-    }
-
-    private void GoToArtist(string artistId)
-    {
-        Nav.NavigateTo($"/artist/{artistId}");
     }
 }

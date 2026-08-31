@@ -3,6 +3,7 @@
 @using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
 @inject NavigationManager Nav
+@inject TelemetryService Telemetry
 
 <h3>Your Playlists</h3>
 
@@ -16,7 +17,7 @@ else
         @foreach (var p in Playlistz.Items)
         {
             <div class="playlist-card"
-                 @onclick="@(() => Nav.NavigateTo($"/playlist/{p.Id}"))">
+                 @onclick="@(() => OnPlaylistClicked(p))">
 
                 <img src="@p.Images?.FirstOrDefault()?.Url"
                      class="playlist-cover" />
@@ -35,5 +36,30 @@ else
     protected override async Task OnInitializedAsync()
     {
         Playlistz = await Auth.GetUserPlaylistsAsync();
+
+        // 🔥 TELEMETRY: Playlists page loaded
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: "Playlists page loaded",
+            context: $"Total playlists: {Playlistz?.Items?.Count}",
+            page: "PlaylistsPage",
+            component: "PlaylistGrid",
+            action: "PageLoaded"
+        );
+    }
+
+    private async Task OnPlaylistClicked(SpotifyPlaylist p)
+    {
+        // 🔥 TELEMETRY: Playlist clicked
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Playlist clicked: {p.Name}",
+            context: $"Owner: {p.Owner?.DisplayName}, Tracks: {p.Items?.Total}",
+            page: "PlaylistsPage",
+            component: "PlaylistCard",
+            action: "PlaylistClicked"
+        );
+
+        Nav.NavigateTo($"/playlist/{p.Id}");
     }
 }

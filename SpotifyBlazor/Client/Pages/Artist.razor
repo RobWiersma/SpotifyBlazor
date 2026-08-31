@@ -3,6 +3,7 @@
 @using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
 @inject NavigationManager Navigation
+@inject TelemetryService Telemetry
 
 @if (artist == null)
 {
@@ -39,7 +40,7 @@ else
                 var albumUrl = $"/album/{album.Id}?from=artist";
 
                 <div class="album-item"
-                     @onclick="() => Navigation.NavigateTo(albumUrl)">
+                     @onclick="() => OnAlbumClicked(album)">
                     <img src="@album.Images.FirstOrDefault()?.Url"
                          alt="@album.Name"
                          class="album-cover-small" />
@@ -80,17 +81,87 @@ else
     [Parameter] public string ArtistId { get; set; }
 
     private SpotifyArtistFull? artist;
-    //private SpotifyPaging<SpotifyAlbum>? albums;
     private SpotifyPaging<SpotifyAlbum>? albumPage;
 
     protected override async Task OnInitializedAsync()
     {
         artist = await Auth.GetArtistAsync(ArtistId);
         albumPage = await Auth.GetArtistAlbumsPage(ArtistId, 0, 10);
+
+        // 🔥 TELEMETRY: Artist selected
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Artist selected: {artist?.Name}",
+            context: $"Genres: {string.Join(", ", artist?.Genres ?? new List<string>())}",
+            page: "ArtistPage",
+            component: "ArtistHeader",
+            action: "ArtistSelected"
+        );
+    }
+
+    private async Task OnAlbumClicked(SpotifyAlbum album)
+    {
+        // 🔥 TELEMETRY: Album clicked from artist page
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Album clicked: {album.Name}",
+            context: $"Artist: {artist?.Name}",
+            page: "ArtistPage",
+            component: "AlbumList",
+            action: "AlbumClicked"
+        );
+
+        Navigation.NavigateTo($"/album/{album.Id}?from=artist");
+    }
+
+    private async Task LoadNextPage()
+    {
+        if (albumPage?.Next != null)
+        {
+            albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Next);
+
+            // 🔥 TELEMETRY: Pagination next
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: $"Artist album page: Next",
+                context: $"Artist: {artist?.Name}",
+                page: "ArtistPage",
+                component: "Pagination",
+                action: "NextPage"
+            );
+        }
+    }
+
+    private async Task LoadPreviousPage()
+    {
+        if (albumPage?.Previous != null)
+        {
+            albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Previous);
+
+            // 🔥 TELEMETRY: Pagination previous
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: $"Artist album page: Previous",
+                context: $"Artist: {artist?.Name}",
+                page: "ArtistPage",
+                component: "Pagination",
+                action: "PreviousPage"
+            );
+        }
     }
 
     private async Task Play(string uri)
     {
+        // Optional: track play telemetry
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Track played from artist page",
+            context: $"Artist: {artist?.Name}",
+            page: "ArtistPage",
+            component: "TrackPlay",
+            action: "TrackPlayed"
+        );
+
         await Auth.PlayTrackAsync(uri);
     }
 
@@ -98,17 +169,5 @@ else
     {
         var ts = TimeSpan.FromMilliseconds(ms);
         return $"{ts.Minutes}:{ts.Seconds:D2}";
-    }
-
-    private async Task LoadNextPage()
-    {
-        if (albumPage?.Next != null)
-            albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Next);
-    }
-
-    private async Task LoadPreviousPage()
-    {
-        if (albumPage?.Previous != null)
-            albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Previous);
     }
 }

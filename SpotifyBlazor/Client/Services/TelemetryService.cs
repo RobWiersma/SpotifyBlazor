@@ -32,7 +32,7 @@ public class TelemetryService
     {
         // 🔍 DIAGNOSTIC: Log Authorization header BEFORE sending
         var authHeader = _http.DefaultRequestHeaders.Authorization?.ToString();
-        _logger.LogWarning("DIAGNOSTIC: HttpClient Authorization header = {Auth}", authHeader ?? "<null>");
+        //_logger.LogWarning("DIAGNOSTIC: HttpClient Authorization header = {Auth}", authHeader ?? "<null>");
 
         var evt = new TelemetryEvent(
             level,

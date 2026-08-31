@@ -2,6 +2,7 @@
 @inject NavigationManager Nav
 @inject HttpClient Http
 @inject SpotifyAuthService Auth
+@inject TelemetryService Telemetry
 @using SpotifyBlazor.Client.Services
 @using SpotifyBlazor.Shared.Models
 
@@ -49,9 +50,28 @@
     {
         IsSearching = true;
 
-        var queryText = $"/api/search?q={Query}";
+        // 🔥 TELEMETRY: Search executed
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Search executed: {Query}",
+            context: null,
+            page: "SearchPage",
+            component: "SearchBox",
+            action: "SearchExecuted"
+        );
 
+        var queryText = $"/api/search?q={Query}";
         Results = await Auth.SearchAsync(queryText);
+
+        // 🔥 TELEMETRY: Search results received
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Search results received: {Results.Count} items",
+            context: $"Query: {Query}",
+            page: "SearchPage",
+            component: "SearchResults",
+            action: "ResultsReceived"
+        );
 
         IsSearching = false;
     }
@@ -66,13 +86,22 @@
 
     void Navigate(SearchResult item)
     {
+        // 🔥 TELEMETRY: Search result clicked
+        Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Search result clicked: {item.Name}",
+            context: $"Type: {item.Type}",
+            page: "SearchPage",
+            component: "SearchResults",
+            action: "ResultClicked"
+        );
+
         if (item.Type == "track")
         {
             _ = Play(item.Id);
             return;
         }
 
-        // normal navigation for artist/album
         switch (item.Type)
         {
             case "artist":
@@ -86,6 +115,16 @@
 
     async Task Play(string id)
     {
+        // 🔥 TELEMETRY: Track played from search
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Track played from search: {id}",
+            context: $"Query: {Query}",
+            page: "SearchPage",
+            component: "SearchResults",
+            action: "TrackPlayed"
+        );
+
         await Auth.PlayTrackAsync(id);
     }
 }

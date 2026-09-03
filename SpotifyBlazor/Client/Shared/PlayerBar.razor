@@ -3,6 +3,7 @@
 @inject SpotifyAuthService Auth
 @inject TelemetryService Telemetry
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <div class="playerbar d-flex align-items-center gap-3 px-3 py-2">
 
@@ -36,12 +37,13 @@
                 <button class="btn btn-sm btn-dark" @onclick="NextTrack">⏭</button>
             </div>
 
-            <div class="progress-container w-100 mt-2">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill" style="width:@ProgressPercent%;"></div>
+            <!-- ⭐ PROGRESS BAR -->
+            <div class="playerbar-progress w-100 mt-3">
+                <div class="progress-bg" @ref="progressBarRef" @onclick="Seek">
+                    <div class="progress-fill" style="width:@ProgressPercent%"></div>
                 </div>
 
-                <div class="d-flex justify-content-between text-light small mt-1 w-100">
+                <div class="d-flex justify-content-between text-light small mt-1">
                     <span>@FormatTime(nowPlaying.ProgressMs)</span>
                     <span>@FormatTime(nowPlaying.Item.DurationMs)</span>
                 </div>
@@ -56,14 +58,14 @@
 
 </div>
 
-
 @code {
     private SpotifyNowPlaying? nowPlaying;
     private bool refreshLoopStarted = false;
 
+    private ElementReference progressBarRef;
+
     protected override async Task OnInitializedAsync()
     {
-        // React to login state changes
         Auth.LoginStateChanged += async state =>
         {
             if (state == LoginState.LoggedIn)
@@ -85,7 +87,6 @@
             }
         };
 
-        // React to playback changes
         Auth.OnPlaybackChanged += async () =>
         {
             if (Auth.State == LoginState.LoggedIn)
@@ -95,7 +96,6 @@
             }
         };
 
-        // If already logged in (e.g., page reload)
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadNowPlaying();
@@ -155,7 +155,7 @@
     }
 
     // ---------------------------------------------------------
-    // TELEMETRY + PLAYER CONTROLS (GUARDED)
+    // PLAYER CONTROLS + TELEMETRY
     // ---------------------------------------------------------
 
     private async Task PrevTrack()
@@ -238,6 +238,29 @@
             actionName: isPlaying ? "Pause" : "Play"
         );
 
+        StateHasChanged();
+    }
+
+    // ---------------------------------------------------------
+    // SEEK SUPPORT (CLICK PROGRESS BAR)
+    // ---------------------------------------------------------
+
+    private async Task Seek(MouseEventArgs e)
+    {
+        if (Auth.State != LoginState.LoggedIn || nowPlaying?.Item == null)
+            return;
+
+        var width = await JS.InvokeAsync<double>("getWidth", progressBarRef);
+
+        if (width <= 0)
+            return;
+
+        var percent = e.OffsetX / width;
+        var newMs = (int)(nowPlaying.Item.DurationMs * percent);
+
+        await Auth.SeekAsync(newMs);
+
+        nowPlaying.ProgressMs = newMs;
         StateHasChanged();
     }
 }

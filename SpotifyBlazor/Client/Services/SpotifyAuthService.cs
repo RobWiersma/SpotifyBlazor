@@ -78,6 +78,33 @@ public class SpotifyAuthService
         }
     }
 
+    public async Task SeekAsync(int positionMs)
+    {
+        if (string.IsNullOrEmpty(AccessToken))
+            return;
+
+        try
+        {
+            var request = new HttpRequestMessage(
+                HttpMethod.Put,
+                $"https://api.spotify.com/v1/me/player/seek?position_ms={positionMs}");
+
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+
+            var response = await _http.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"SeekAsync failed: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SeekAsync exception: {ex.Message}");
+        }
+    }
+
     public async Task<T> GetAsync<T>(string path)
     {
         foreach (var api in _apiEndpoints)

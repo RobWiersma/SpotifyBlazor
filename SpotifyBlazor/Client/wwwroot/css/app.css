@@ -464,20 +464,6 @@ a:hover {
     }
 }
 
-/* Position the popup above and left of the button */
-.volume-popup {
-    position: absolute;
-    bottom: 45px;        /* move upward */
-    left: -20px;         /* shift left */
-    background: #222;
-    padding: 12px;
-    border-radius: 8px;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
 /* Ensure the container is the anchor point */
 .volume-container {
     position: relative;
@@ -535,16 +521,46 @@ a:hover {
     cursor: not-allowed;
 }
 
+/* Anchor the popup to the button */
+.volume-container {
+    position: relative;
+    display: inline-block;
+}
 
+/* Floating panel */
+.volume-popup {
+    position: absolute;
+    bottom: 45px; /* float upward */
+    left: -20px; /* shift left like DevicePicker */
+    background: #222;
+    padding: 12px;
+    border-radius: 8px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    width: auto; /* no layout impact */
+}
 
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
 
 /* Mobile layout */
 @media (max-width: 600px) {
 
+    /* Put album art + track info on one line */
     .playerbar {
-        flex-direction: column !important;
-        align-items: center !important;
-        text-align: center;
+        flex-wrap: wrap; /* allow breaking into multiple lines */
     }
 
     .player-controls-wrapper {
@@ -571,12 +587,116 @@ a:hover {
         font-size: 1.1rem;
     }
 
-    /* Album art scaling */
+
+    /* Album art stays left */
     .playerbar-art {
-        width: 120px;
-        height: 120px;
-        margin-bottom: 10px;
+        width: 52px;
+        height: 52px;
+        border-radius: 6px;
     }
 
+    .volume-popup {
+        bottom: 55px; /* float a bit higher */
+        left: -10px; /* tighter alignment */
+        padding: 10px;
+        transform: scale(0.95); /* subtle compact feel */
+        animation: fadeUp 0.15s ease-out;
+    }
 
+    /* shrink the whole progress section */
+    .playerbar-progress {
+        margin-top: 6px !important;
+    }
+
+    /* Make progress bar smaller + tighter */
+    .progress-bg,
+    .progress-fill {
+        height: 6px !important;
+        border-radius: 3px !important;
+    }
+
+    .playerbar-progress {
+        margin-top: 4px !important;
+    }
+
+        .playerbar-progress .d-flex {
+            margin-top: 2px !important;
+            font-size: 0.75rem !important;
+        }
+
+    .mobile-tools-toggle {
+        padding: 2px 6px !important;
+        font-size: 0.65rem !important;
+        height: 30px !important;
+        width: 80px !important;
+        text-align: center;
+    }
+
+    /* Track info stays right of album art */
+    .track-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: calc(100% - 70px); /* prevent overflow */
+    }
+
+    .track-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .track-artist {
+        font-size: 0.75rem;
+        opacity: 0.85;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ⭐ Force progress bar to its own full-width line */
+    .player-controls-wrapper {
+        width: 100%;
+        margin-top: 6px;
+    }
+}
+
+/* Hide desktop tools on mobile */
+@media (max-width: 600px) {
+    .desktop-tools {
+        display: none !important;
+    }
+}
+
+/* Hide mobile tools on desktop */
+@media (min-width: 601px) {
+    .mobile-tools-toggle,
+    .mobile-tools-panel {
+        display: none !important;
+    }
+}
+
+/* Mobile toggle button */
+.mobile-tools-toggle {
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 10px;
+}
+
+/* Floating mobile tools panel */
+.mobile-tools-panel {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #222;
+    padding: 12px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }

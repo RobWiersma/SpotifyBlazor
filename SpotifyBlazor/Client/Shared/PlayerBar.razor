@@ -22,9 +22,9 @@
         <img src="@nowPlaying.Item.Album.Images.FirstOrDefault()?.Url"
              class="playerbar-art" />
 
-        <div class="d-flex flex-column">
-            <strong>@nowPlaying.Item.Name</strong>
-            <span>@string.Join(", ", nowPlaying.Item.Artists.Select(a => a.Name))</span>
+        <div class="track-info">
+            <strong class="track-title">@nowPlaying.Item.Name</strong>
+            <span class="track-artist">@string.Join(", ", nowPlaying.Item.Artists.Select(a => a.Name))</span>
         </div>
 
         <div class="player-controls-wrapper d-flex flex-column align-items-center">
@@ -47,16 +47,27 @@
                     <span>@FormatTime(nowPlaying.Item.DurationMs)</span>
                 </div>
             </div>
-
         </div>
 
-        <!-- ⭐ Volume Popup FIRST so @ref is assigned -->
-        <div>
+        <!-- ⭐ MOBILE TOOLS TOGGLE -->
+        <button class="mobile-tools-toggle btn btn-dark d-md-none" @onclick="ToggleMobileTools">
+            ⚙️ Options
+        </button>
+
+        @if (showMobileTools)
+        {
+            <div class="mobile-tools-panel d-md-none">
+                <VolumePopup @ref="VolumePopup" />
+                <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
+            </div>
+        }
+
+        <!-- ⭐ DESKTOP FLOATING CONTROLS -->
+        <div class="desktop-tools d-none d-md-block">
             <VolumePopup @ref="VolumePopup" />
         </div>
 
-        <!-- ⭐ Device Picker SECOND so callback is safe -->
-        <div>
+        <div class="desktop-tools d-none d-md-block">
             <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
         </div>
     }
@@ -74,6 +85,13 @@
     private bool refreshLoopStarted = false;
 
     private ElementReference progressBarRef;
+
+    private bool showMobileTools = false;
+
+    private void ToggleMobileTools()
+    {
+        showMobileTools = !showMobileTools;
+    }
 
     private async Task HandleDeviceChanged()
     {

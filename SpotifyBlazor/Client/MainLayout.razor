@@ -41,6 +41,33 @@
     string SearchText = "";
     CancellationTokenSource? debounceCts;
 
+    // ---------------------------------------------------------
+    // INITIALIZATION
+    // ---------------------------------------------------------
+    protected override void OnInitialized()
+    {
+        // Subscribe to login state changes
+        Auth.LoginStateChanged += OnLoginStateChanged;
+    }
+
+    private void OnLoginStateChanged(LoginState state)
+    {
+        if (state == LoginState.LoggedIn)
+        {
+            // Optional telemetry when layout becomes authenticated
+            Telemetry.TrackAsync(
+                "Info",
+                "LayoutAuthenticated",
+                page: "MainLayout",
+                component: "AuthState",
+                action: "LoginComplete"
+            );
+        }
+    }
+
+    // ---------------------------------------------------------
+    // SEARCH INPUT TELEMETRY (GUARDED)
+    // ---------------------------------------------------------
     void OnSearchInput(ChangeEventArgs e)
     {
         SearchText = e.Value?.ToString() ?? "";
@@ -57,6 +84,10 @@
 
                 if (!token.IsCancellationRequested)
                 {
+                    // Prevent telemetry before login
+                    if (Auth.State != LoginState.LoggedIn)
+                        return;
+
                     await Telemetry.TrackTimedAsync(
                         "Info",
                         "SearchStarted",
@@ -72,34 +103,43 @@
         });
     }
 
+    // ---------------------------------------------------------
+    // SEARCH SUBMIT TELEMETRY (GUARDED)
+    // ---------------------------------------------------------
     void HandleSearchKey(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            Telemetry.TrackAsync(
-                "Info",
-                "SearchSubmitted",
-                context: SearchText,
-                page: "MainLayout",
-                component: "SearchBox",
-                action: "Submit"
-            );
+            if (Auth.State == LoginState.LoggedIn)
+            {
+                Telemetry.TrackAsync(
+                    "Info",
+                    "SearchSubmitted",
+                    context: SearchText,
+                    page: "MainLayout",
+                    component: "SearchBox",
+                    action: "Submit"
+                );
+            }
 
             Navigation.NavigateTo($"/search?q={SearchText}", forceLoad: true);
         }
     }
 
+    // ---------------------------------------------------------
+    // DISPOSAL
+    // ---------------------------------------------------------
     public async ValueTask DisposeAsync()
     {
         debounceCts?.Cancel();
         debounceCts?.Dispose();
+        Auth.LoginStateChanged -= OnLoginStateChanged;
     }
 
     public void Dispose()
     {
         debounceCts?.Cancel();
         debounceCts?.Dispose();
+        Auth.LoginStateChanged -= OnLoginStateChanged;
     }
-
-    
 }

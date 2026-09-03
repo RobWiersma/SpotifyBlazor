@@ -26,6 +26,15 @@ public class SpotifyAuthService
 
     private const string StorageKey = "spotify_auth";
 
+    public LoginState State { get; private set; } = LoginState.NotLoggedIn;
+    public event Action<LoginState>? LoginStateChanged;
+
+    private void SetState(LoginState newState)
+    {
+        State = newState;
+        LoginStateChanged?.Invoke(newState);
+    }
+
     public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger)
     {
         _http = http;
@@ -39,6 +48,35 @@ public class SpotifyAuthService
     {
         "https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net"
     };
+
+    public async Task InitializeFromStorageAsync()
+    {
+        _logger.LogInformation("Loading tokens from localStorage");
+
+        AccessToken = await _js.InvokeAsync<string>("localStorage.getItem", "spotify_access_token");
+        RefreshToken = await _js.InvokeAsync<string>("localStorage.getItem", "spotify_refresh_token");
+        ApiJwt = await _js.InvokeAsync<string>("localStorage.getItem", "api_jwt");
+
+        if (!string.IsNullOrEmpty(ApiJwt))
+        {
+            _http.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", ApiJwt);
+
+            _logger.LogInformation("Restored API JWT into HttpClient");
+        }
+
+        if (!string.IsNullOrEmpty(AccessToken) &&
+            !string.IsNullOrEmpty(ApiJwt))
+        {
+            SetState(LoginState.LoggedIn);
+            _logger.LogInformation("LoginState set to LoggedIn after restore");
+        }
+        else
+        {
+            SetState(LoginState.NotLoggedIn);
+            _logger.LogInformation("LoginState set to NotLoggedIn after restore");
+        }
+    }
 
     public async Task<T> GetAsync<T>(string path)
     {
@@ -123,7 +161,23 @@ public class SpotifyAuthService
         {
             _logger.LogInformation("No API JWT found to restore");
         }
+
+        // ---------------------------------------------------------
+        // Set login state after restore
+        // ---------------------------------------------------------
+        if (!string.IsNullOrEmpty(AccessToken) &&
+            !string.IsNullOrEmpty(ApiJwt))
+        {
+            SetState(LoginState.LoggedIn);
+            _logger.LogInformation("LoginState set to LoggedIn in InitializeAsync");
+        }
+        else
+        {
+            SetState(LoginState.NotLoggedIn);
+            _logger.LogInformation("LoginState set to NotLoggedIn in InitializeAsync");
+        }
     }
+
 
 
 
@@ -144,6 +198,9 @@ public class SpotifyAuthService
 
     public async Task SetInitialTokens(TokenResponseFull token)
     {
+        // Begin login flow
+        SetState(LoginState.LoggingIn);
+
         _logger.LogInformation("Setting initial Spotify tokens");
 
         // Store Spotify tokens
@@ -162,8 +219,19 @@ public class SpotifyAuthService
         // ---------------------------------------------------------
         _logger.LogInformation("Exchanging Spotify token for API JWT");
 
-        var resp = await _http.PostAsJsonAsync("/api/auth/spotify-login",
-            new { SpotifyAccessToken = AccessToken });
+        HttpResponseMessage resp;
+
+        try
+        {
+            resp = await _http.PostAsJsonAsync("/api/auth/spotify-login",
+                new { SpotifyAccessToken = AccessToken });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("API JWT exchange threw exception: {Ex}", ex.Message);
+            SetState(LoginState.LoginFailed);
+            return;
+        }
 
         if (!resp.IsSuccessStatusCode)
         {
@@ -171,7 +239,8 @@ public class SpotifyAuthService
                 "API JWT exchange failed StatusCode={StatusCode}",
                 resp.StatusCode
             );
-            throw new Exception("Failed to exchange Spotify token for API JWT.");
+            SetState(LoginState.LoginFailed);
+            return;
         }
 
         var raw = await resp.Content.ReadAsStringAsync();
@@ -183,7 +252,8 @@ public class SpotifyAuthService
         if (string.IsNullOrEmpty(ApiJwt))
         {
             _logger.LogWarning("API JWT was null or empty after exchange");
-            throw new Exception("API JWT missing after exchange.");
+            SetState(LoginState.LoginFailed);
+            return;
         }
 
         _logger.LogInformation("API JWT received and stored");
@@ -200,7 +270,11 @@ public class SpotifyAuthService
         await PersistAsync();
 
         _logger.LogInformation("All tokens persisted to localStorage");
+
+        // Login complete
+        SetState(LoginState.LoggedIn);
     }
+
 
 
     public async Task<bool> RefreshIfNeededAsync()

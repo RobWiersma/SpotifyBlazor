@@ -22,32 +22,57 @@
     {
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         Console.WriteLine("Callback URL: " + uri);
-        await Telemetry.TrackAsync("info", "Callback URL received", uri.ToString(), page: "spotcallback");
+
+        // Only log telemetry if logged in (prevents early JWT crash)
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await Telemetry.TrackAsync("info", "Callback URL received", uri.ToString(), page: "spotcallback");
+        }
 
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         Code = query["code"];
 
         Console.WriteLine("Extracted Code: " + Code);
-        await Telemetry.TrackAsync("info", "Code extracted", Code, page: "spotcallback");
+
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await Telemetry.TrackAsync("info", "Code extracted", Code, page: "spotcallback");
+        }
 
         if (string.IsNullOrEmpty(Code))
         {
             Console.WriteLine("No code found in callback URL.");
-            await Telemetry.TrackAsync("warn", "Callback missing code", page: "spotcallback");
+
+            if (Auth.State == LoginState.LoggedIn)
+            {
+                await Telemetry.TrackAsync("warn", "Callback missing code", page: "spotcallback");
+            }
+
             return;
         }
 
+        // ---------------------------------------------------------
         // 1. Exchange authorization code for Spotify tokens
+        // ---------------------------------------------------------
         Console.WriteLine("Exchanging code for Spotify tokens...");
-        await Telemetry.TrackAsync("info", "Exchanging code for Spotify tokens", Code, page: "spotcallback");
+
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await Telemetry.TrackAsync("info", "Exchanging code for Spotify tokens", Code, page: "spotcallback");
+        }
 
         var tokenResponse = await Http.PostAsJsonAsync("/api/spotify/exchange", new { Code });
 
         if (!tokenResponse.IsSuccessStatusCode)
         {
             Console.WriteLine("Spotify token exchange failed.");
-            await Telemetry.TrackAsync("error", "Spotify token exchange failed",
-                tokenResponse.StatusCode.ToString(), page: "spotcallback");
+
+            if (Auth.State == LoginState.LoggedIn)
+            {
+                await Telemetry.TrackAsync("error", "Spotify token exchange failed",
+                    tokenResponse.StatusCode.ToString(), page: "spotcallback");
+            }
+
             return;
         }
 
@@ -56,64 +81,45 @@
         Console.WriteLine("Access Token: " + token?.access_token);
         Console.WriteLine("Refresh Token: " + token?.refresh_token);
 
-        await Telemetry.TrackAsync("info", "Spotify tokens received",
-            $"access={token?.access_token?.Length}, refresh={token?.refresh_token?.Length}",
-            page: "spotcallback");
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await Telemetry.TrackAsync("info", "Spotify tokens received",
+                $"access={token?.access_token?.Length}, refresh={token?.refresh_token?.Length}",
+                page: "spotcallback");
+        }
 
-        // Save Spotify tokens into AuthService + localStorage
+        // ---------------------------------------------------------
+        // 2. Let AuthService handle ALL JWT logic
+        // ---------------------------------------------------------
         await Auth.SetInitialTokens(token);
 
-        // 2. Exchange Spotify access token for API JWT
-        Console.WriteLine("Exchanging Spotify access token for API JWT...");
-        await Telemetry.TrackAsync("info", "Exchanging Spotify access token for API JWT",
-            page: "spotcallback");
-
-        var jwtResponse = await Http.PostAsJsonAsync("/api/auth/spotify-login",
-            new SpotifyLoginRequest { SpotifyAccessToken = token!.access_token });
-
-        // ⭐ RAW JWT RESPONSE LOGGING (critical)
-        var raw = await jwtResponse.Content.ReadAsStringAsync();
-        Console.WriteLine("RAW JWT RESPONSE: " + raw);
-
-        await Telemetry.TrackAsync(
-            "info",
-            "Raw JWT response",
-            raw,
-            page: "spotcallback"
-        );
-
-        if (!jwtResponse.IsSuccessStatusCode)
+        // If login failed, stop here
+        if (Auth.State == LoginState.LoginFailed)
         {
-            Console.WriteLine("API JWT exchange failed.");
-            await Telemetry.TrackAsync("error", "API JWT exchange failed",
-                jwtResponse.StatusCode.ToString(), page: "spotcallback");
+            Console.WriteLine("Login failed inside SetInitialTokens.");
+
+            await Telemetry.TrackAsync("crit", "LoginFailed in SetInitialTokens", page: "spotcallback");
+
             return;
         }
 
-        var jwtJson = await jwtResponse.Content.ReadFromJsonAsync<JsonElement>();
-        var jwt = jwtJson.GetProperty("jwt").GetString();
-
-        Console.WriteLine("API JWT: " + jwt);
-        await Telemetry.TrackAsync("info", "API JWT received",
-            $"jwtLength={jwt?.Length}", page: "spotcallback");
-
-        if (string.IsNullOrEmpty(jwt))
+        // If still not logged in, do not continue
+        if (Auth.State != LoginState.LoggedIn)
         {
-            Console.WriteLine("API JWT missing after exchange.");
-            await Telemetry.TrackAsync("crit", "API JWT missing after exchange",
-                page: "spotcallback");
+            Console.WriteLine("User not logged in after SetInitialTokens.");
             return;
         }
 
-        // 3. Apply JWT to HttpClient
-        Auth.ApplyJwt(jwt);
-
-        // 4. Save JWT to localStorage
-        await JS.InvokeVoidAsync("localStorage.setItem", "api_jwt", jwt);
+        // ---------------------------------------------------------
+        // 3. Persist JWT to localStorage (AuthService already applied it)
+        // ---------------------------------------------------------
+        await JS.InvokeVoidAsync("localStorage.setItem", "api_jwt", Auth.ApiJwt);
 
         await Telemetry.TrackAsync("info", "JWT stored + applied", page: "spotcallback");
 
-        // 5. Redirect home
+        // ---------------------------------------------------------
+        // 4. Redirect home
+        // ---------------------------------------------------------
         Nav.NavigateTo("/");
     }
 }

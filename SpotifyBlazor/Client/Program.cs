@@ -31,6 +31,7 @@ await config.LoadAsync();
 
 // Hydrate SpotifyAuthService BEFORE rendering UI
 var auth = host.Services.GetRequiredService<SpotifyAuthService>();
+await auth.InitializeFromStorageAsync();
 await auth.InitializeAsync();
 
 

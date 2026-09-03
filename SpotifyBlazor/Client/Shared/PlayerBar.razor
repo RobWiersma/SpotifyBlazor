@@ -6,7 +6,17 @@
 
 <div class="playerbar d-flex align-items-center gap-3 px-3 py-2">
 
-    @if (nowPlaying?.Item != null)
+    @if (Auth.State != LoginState.LoggedIn)
+    {
+        <span class="text-light small">
+            @(Auth.State == LoginState.LoggingIn
+                ? "Connecting to Spotify…"
+                : Auth.State == LoginState.LoginFailed
+                    ? "Login failed"
+                    : "Not logged in")
+        </span>
+    }
+    else if (nowPlaying?.Item != null)
     {
         <img src="@nowPlaying.Item.Album.Images.FirstOrDefault()?.Url"
              class="playerbar-art" />
@@ -49,25 +59,59 @@
 
 @code {
     private SpotifyNowPlaying? nowPlaying;
+    private bool refreshLoopStarted = false;
 
     protected override async Task OnInitializedAsync()
     {
-        if (!string.IsNullOrEmpty(Auth.AccessToken))
+        // React to login state changes
+        Auth.LoginStateChanged += async state =>
         {
-            await LoadNowPlaying();
-            _ = RefreshLoop();
-        }
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadNowPlaying();
 
+                if (!refreshLoopStarted)
+                {
+                    refreshLoopStarted = true;
+                    _ = RefreshLoop();
+                }
+
+                StateHasChanged();
+            }
+            else
+            {
+                nowPlaying = null;
+                StateHasChanged();
+            }
+        };
+
+        // React to playback changes
         Auth.OnPlaybackChanged += async () =>
         {
-            await LoadNowPlaying();
-            StateHasChanged();
+            if (Auth.State == LoginState.LoggedIn)
+            {
+                await LoadNowPlaying();
+                StateHasChanged();
+            }
         };
+
+        // If already logged in (e.g., page reload)
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadNowPlaying();
+
+            if (!refreshLoopStarted)
+            {
+                refreshLoopStarted = true;
+                _ = RefreshLoop();
+            }
+        }
     }
 
-    private double ProgressPercent => nowPlaying == null || nowPlaying.Item == null
-        ? 0
-        : (double)nowPlaying.ProgressMs / nowPlaying.Item.DurationMs * 100;
+    private double ProgressPercent =>
+        nowPlaying?.Item == null
+            ? 0
+            : (double)nowPlaying.ProgressMs / nowPlaying.Item.DurationMs * 100;
 
     private async Task RefreshLoop()
     {
@@ -77,7 +121,11 @@
         {
             await Task.Delay(1000);
 
+            if (Auth.State != LoginState.LoggedIn)
+                continue;
+
             apiRefreshCounter++;
+
             if (apiRefreshCounter >= 10)
             {
                 apiRefreshCounter = 0;
@@ -94,6 +142,9 @@
 
     private async Task LoadNowPlaying()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         nowPlaying = await Auth.GetNowPlayingAsync();
     }
 
@@ -104,11 +155,14 @@
     }
 
     // ---------------------------------------------------------
-    // TELEMETRY + PLAYER CONTROLS
+    // TELEMETRY + PLAYER CONTROLS (GUARDED)
     // ---------------------------------------------------------
 
     private async Task PrevTrack()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackTimedAsync(
             "Info",
             "PlayerBar.PrevTrack",
@@ -128,6 +182,9 @@
 
     private async Task NextTrack()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackTimedAsync(
             "Info",
             "PlayerBar.NextTrack",
@@ -158,6 +215,9 @@
 
     private async Task TogglePlayPause()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         var isPlaying = nowPlaying?.IsPlaying == true;
 
         await Telemetry.TrackTimedAsync(

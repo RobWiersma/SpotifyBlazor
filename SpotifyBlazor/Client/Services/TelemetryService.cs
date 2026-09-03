@@ -8,18 +8,40 @@ namespace SpotifyBlazor.Client.Services;
 public class TelemetryService
 {
     private readonly HttpClient _http;
+    private readonly SpotifyAuthService _auth;
     private readonly ILogger<TelemetryService> _logger;
 
-    public TelemetryService(HttpClient http, ILogger<TelemetryService> logger)
+    public TelemetryService(HttpClient http, SpotifyAuthService auth, ILogger<TelemetryService> logger)
     {
         _http = http;
+        _auth = auth;
         _logger = logger;
 
-        _logger.LogWarning("DIAGNOSTIC: TelemetryService  HttpClient hash = {Hash}", _http.GetHashCode());
+        _logger.LogWarning("DIAGNOSTIC: TelemetryService HttpClient hash = {Hash}", _http.GetHashCode());
     }
 
     // ---------------------------------------------------------
-    // Core telemetry send (diagnostic)
+    // Guard: Prevent telemetry before login + before JWT exists
+    // ---------------------------------------------------------
+    private bool CanSendTelemetry()
+    {
+        if (_auth.State != LoginState.LoggedIn)
+        {
+            _logger.LogWarning("Telemetry blocked: user not logged in (State={State})", _auth.State);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(_auth.ApiJwt))
+        {
+            _logger.LogWarning("Telemetry blocked: API JWT missing");
+            return false;
+        }
+
+        return true;
+    }
+
+    // ---------------------------------------------------------
+    // Core telemetry send
     // ---------------------------------------------------------
     public async Task TrackAsync(
         string level,
@@ -30,9 +52,10 @@ public class TelemetryService
         string? action = null,
         double? durationMs = null)
     {
-        // 🔍 DIAGNOSTIC: Log Authorization header BEFORE sending
+        if (!CanSendTelemetry())
+            return;
+
         var authHeader = _http.DefaultRequestHeaders.Authorization?.ToString();
-        //_logger.LogWarning("DIAGNOSTIC: HttpClient Authorization header = {Auth}", authHeader ?? "<null>");
 
         var evt = new TelemetryEvent(
             level,
@@ -81,6 +104,9 @@ public class TelemetryService
         string? component = null,
         string? actionName = null)
     {
+        if (!CanSendTelemetry())
+            return;
+
         var sw = Stopwatch.StartNew();
 
         try

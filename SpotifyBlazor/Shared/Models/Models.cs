@@ -671,5 +671,13 @@ namespace SpotifyBlazor.Shared.Models
         public string jwt { get; set; }
     }
 
+    public enum LoginState
+    {
+        NotLoggedIn,
+        LoggingIn,
+        LoggedIn,
+        LoginFailed
+    }
+
     public record TelemetryEvent(string Level, string Message, string? Context, string? ClientTime, string? ClientVersion, string? Page, string? Component, string? Action, double? DurationMs);
 }

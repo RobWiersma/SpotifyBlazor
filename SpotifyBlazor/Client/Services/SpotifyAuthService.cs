@@ -1017,4 +1017,161 @@ public class SpotifyAuthService
         return true;
     }
 
-}
+    public async Task<List<SpotifyDevice>> GetDevicesAsync()
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "https://api.spotify.com/v1/me/player/devices");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+            return new List<SpotifyDevice>();
+
+        var json = await response.Content.ReadFromJsonAsync<SpotifyDeviceResponse>();
+        return json?.Devices ?? new List<SpotifyDevice>();
+    }
+
+    public async Task<bool> TransferPlaybackAsync(string deviceId)
+    {
+        var body = new
+        {
+            device_ids = new[] { deviceId },
+            play = true
+        };
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            "https://api.spotify.com/v1/me/player")
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+
+        Console.WriteLine($"TransferPlaybackAsync: {res.StatusCode}");
+        Console.WriteLine(await res.Content.ReadAsStringAsync());
+
+        return res.IsSuccessStatusCode;
+    }
+
+
+    public async Task<int> GetVolumeAsync()
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, "https://api.spotify.com/v1/me/player");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+
+        Console.WriteLine($"GetVolumeAsync: Status = {res.StatusCode}");
+
+        // ⭐ Dump raw JSON from Spotify
+        var raw = await res.Content.ReadAsStringAsync();
+        Console.WriteLine("GetVolumeAsync RAW JSON:");
+        Console.WriteLine(raw);
+
+        if (!res.IsSuccessStatusCode)
+            return 50; // safe fallback
+
+        // ⭐ Try to parse JSON into your model
+        var json = await res.Content.ReadFromJsonAsync<SpotifyPlayerState>();
+
+        // ⭐ Dump parsed object for debugging
+        Console.WriteLine("GetVolumeAsync Parsed Device:");
+        Console.WriteLine($"Device ID: {json?.Device?.Id}");
+        Console.WriteLine($"Device Name: {json?.Device?.Name}");
+        Console.WriteLine($"Device Type: {json?.Device?.Type}");
+        Console.WriteLine($"Volume Percent: {json?.Device?.VolumePercent}");
+
+        return json?.Device?.VolumePercent ?? 50;
+    }
+
+
+    public async Task SetVolumeAsync(int volume)
+    {
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"https://api.spotify.com/v1/me/player/volume?volume_percent={volume}");
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        // ❌ DO NOT add Content-Type here — it causes the crash
+        // req.Headers.Add("Content-Type", "application/json");
+
+        var res = await _http.SendAsync(req);
+
+        Console.WriteLine($"SetVolumeAsync: {res.StatusCode}");
+        Console.WriteLine(await res.Content.ReadAsStringAsync());
+    }
+    public async Task<bool> TrySetVolumeAsync(int volume)
+    {
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"https://api.spotify.com/v1/me/player/volume?volume_percent={volume}");
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+
+        Console.WriteLine($"TrySetVolumeAsync: {res.StatusCode}");
+        Console.WriteLine(await res.Content.ReadAsStringAsync());
+
+        // ⭐ Correct logic:
+        // 204 = success
+        // 202 = ignored (unsupported device)
+        // 403 = restricted device
+        // 404 = no active device
+        // 401 = expired token
+
+        return res.StatusCode == System.Net.HttpStatusCode.NoContent;
+    }
+
+
+    public async Task<SpotifyPlayerState?> GetPlayerStateAsync()
+    {
+        // Debug: show outgoing request
+        Console.WriteLine("GetPlayerStateAsync: Sending GET /v1/me/player");
+        Console.WriteLine($"Auth Header: Bearer {AccessToken}");
+
+        var req = new HttpRequestMessage(HttpMethod.Get, "https://api.spotify.com/v1/me/player");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+
+        // Debug: status code
+        Console.WriteLine($"GetPlayerStateAsync: Status = {res.StatusCode}");
+
+        if (!res.IsSuccessStatusCode)
+        {
+            // Debug: error body
+            var errorBody = await res.Content.ReadAsStringAsync();
+            Console.WriteLine($"GetPlayerStateAsync: Error Body = {errorBody}");
+            return null;
+        }
+
+        // Debug: raw JSON
+        var rawJson = await res.Content.ReadAsStringAsync();
+        Console.WriteLine($"GetPlayerStateAsync: Raw JSON = {rawJson}");
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<SpotifyPlayerState>(rawJson);
+            Console.WriteLine("GetPlayerStateAsync: Deserialization OK");
+            return parsed;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"GetPlayerStateAsync: JSON parse error: {ex.Message}");
+            return null;
+        }
+    }
+
+    }

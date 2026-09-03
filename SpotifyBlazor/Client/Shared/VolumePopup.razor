@@ -1,0 +1,100 @@
+﻿@using SpotifyBlazor.Client.Services
+@inject SpotifyAuthService Auth
+@inject IJSRuntime JS
+
+<div class="volume-container" @onclick:stopPropagation="true">
+    <button class="btn btn-dark" @onclick="ToggleVolume">
+        🔊 Volume
+    </button>
+
+    @if (showVolume)
+    {
+        <div class="volume-popup shadow-lg" @onclick:stopPropagation="true">
+
+            <input type="range"
+                   min="0"
+                   max="100"
+                   value="@volume"
+                   disabled="@(!supportsVolume)"
+                   title="@GetTooltip()"
+                   class="volume-slider @(supportsVolume ? "" : "volume-unsupported")"
+                   @onclick:stopPropagation="true"
+                   @oninput="OnVolumeChanged" />
+
+            @if (volumeError)
+            {
+                <div class="text-warning small mt-2">
+                    ⚠️ @volumeErrorMessage
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool showVolume = false;
+    private int volume = 50;
+
+    private bool volumeError = false;
+    private string volumeErrorMessage = "";
+
+    private bool supportsVolume = true;
+
+    public async Task RefreshVolumeState()
+    {
+        var state = await Auth.GetPlayerStateAsync();
+
+        supportsVolume = state?.Device?.SupportsVolume ?? true;
+
+        var newVolume = state?.Device?.VolumePercent;
+
+        if (newVolume.HasValue)
+        {
+            volume = newVolume.Value;   // ⭐ only update if valid
+        }
+
+        volumeError = false;
+        volumeErrorMessage = "";
+
+        StateHasChanged();
+    }
+
+    private async Task ToggleVolume()
+    {
+        showVolume = !showVolume;
+
+        if (showVolume)
+        {
+            await Task.Delay(300);       // ⭐ allow Spotify to settle
+            await RefreshVolumeState();
+        }
+    }
+
+    private async Task OnVolumeChanged(ChangeEventArgs e)
+    {
+        if (!supportsVolume)
+            return;
+
+        volume = int.Parse(e.Value.ToString());
+
+        var success = await Auth.TrySetVolumeAsync(volume);
+
+        if (!success)
+        {
+            volumeError = true;
+            volumeErrorMessage = "Volume control not supported on this device.";
+        }
+        else
+        {
+            volumeError = false;
+            volumeErrorMessage = "";
+        }
+    }
+
+    private string GetTooltip()
+    {
+        return supportsVolume
+            ? "Adjust playback volume"
+            : "This device does not support remote volume control";
+    }
+}

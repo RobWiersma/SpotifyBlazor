@@ -1,0 +1,103 @@
+﻿@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject SpotifyAuthService Auth
+@inject IJSRuntime JS
+
+<div class="device-picker-container" @onclick:stopPropagation="true">
+    <button class="btn btn-dark" @onclick="ToggleMenu">
+        🎧 Devices
+    </button>
+
+    @if (showMenu)
+    {
+        <div class="device-menu shadow-lg" @onclick:stopPropagation="true">
+            @if (devices == null)
+            {
+                <div class="device-menu-item text-light small">Loading…</div>
+            }
+            else
+            {
+                @foreach (var d in devices)
+                {
+                    <button class="device-menu-item d-flex align-items-center gap-2"
+                            disabled="@d.IsRestricted"
+                            @onclick:stopPropagation="true"
+                            @onclick="() => Switch(d.Id)"
+                            style="@GetStyle(d)">
+                        <span>@GetIcon(d.Type)</span>
+                        <span>@d.Name</span>
+                    </button>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<SpotifyDevice>? devices;
+    private bool showMenu = false;
+    private bool refreshLoopStarted = false;
+
+    [Parameter]
+    public EventCallback OnDeviceChanged { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        devices = await Auth.GetDevicesAsync();
+
+        if (!refreshLoopStarted)
+        {
+            refreshLoopStarted = true;
+            _ = AutoRefreshLoop();
+        }
+    }
+
+    private async Task AutoRefreshLoop()
+    {
+        while (true)
+        {
+            await Task.Delay(5000);
+            devices = await Auth.GetDevicesAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleMenu()
+    {
+        showMenu = !showMenu;
+    }
+
+    private async Task Switch(string id)
+    {
+        await Auth.TransferPlaybackAsync(id);
+
+        // Refresh device list
+        devices = await Auth.GetDevicesAsync();
+
+        // ⭐ Notify parent (VolumePopup)
+        await OnDeviceChanged.InvokeAsync();
+
+        showMenu = false;
+    }
+
+    private string GetIcon(string type)
+    {
+        type = type?.ToLower() ?? "";
+
+        if (type.Contains("computer")) return "💻";
+        if (type.Contains("smartphone")) return "📱";
+        if (type.Contains("speaker")) return "🔊";
+        if (type.Contains("tablet")) return "📟";
+        if (type.Contains("tv")) return "📺";
+        if (type.Contains("game")) return "🎮";
+
+        return "🎧";
+    }
+
+    private string GetStyle(SpotifyDevice d)
+    {
+        return d.IsActive
+            ? "border-left: 4px solid #1db954; background-color:#1db95433;"
+            : "";
+    }
+}

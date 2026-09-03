@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using SpotifyBlazor.Shared.Models;
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 
@@ -70,45 +71,6 @@ namespace SpotifyBlazor.Shared.Models
         [JsonPropertyName("item")]
         public SpotifyTrack Item { get; set; }
 
-    }
-
-    public class SpotifyTrack
-    {
-        [JsonPropertyName("id")]
-        public string Id { get; set; }
-
-        [JsonPropertyName("name")]
-        public string Name { get; set; }
-
-        [JsonPropertyName("uri")]
-        public string Uri { get; set; }
-
-        [JsonPropertyName("duration_ms")]
-        public int DurationMs { get; set; }
-
-        [JsonPropertyName("track_number")]
-        public int TrackNumber { get; set; }
-
-        [JsonPropertyName("disc_number")]
-        public int DiscNumber { get; set; }
-
-        [JsonPropertyName("explicit")]
-        public bool Explicit { get; set; }
-
-        [JsonPropertyName("is_local")]
-        public bool IsLocal { get; set; }
-
-        [JsonPropertyName("href")]
-        public string Href { get; set; }
-
-        [JsonPropertyName("external_urls")]
-        public Dictionary<string, string> ExternalUrls { get; set; }
-
-        [JsonPropertyName("artists")]
-        public List<SpotifyArtist> Artists { get; set; }
-
-        [JsonPropertyName("album")]
-        public SpotifyAlbum? Album { get; set; }
     }
 
 
@@ -680,4 +642,158 @@ namespace SpotifyBlazor.Shared.Models
     }
 
     public record TelemetryEvent(string Level, string Message, string? Context, string? ClientTime, string? ClientVersion, string? Page, string? Component, string? Action, double? DurationMs);
+
+    public class SpotifyDeviceResponse
+    {
+        public List<SpotifyDevice> Devices { get; set; } = new List<SpotifyDevice>();
+    }
+
+
+
+public class SpotifyDevice
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; }
+
+    [JsonPropertyName("is_active")]
+    public bool IsActive { get; set; }
+
+    [JsonPropertyName("is_private_session")]
+    public bool IsPrivateSession { get; set; }
+
+    [JsonPropertyName("is_restricted")]
+    public bool IsRestricted { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; }
+
+    [JsonPropertyName("supports_volume")]
+    public bool SupportsVolume { get; set; }
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; }
+
+    [JsonPropertyName("volume_percent")]
+    public int? VolumePercent { get; set; }
 }
+
+
+    public class SpotifyPlayerState
+    {
+        [JsonPropertyName("device")]
+        public SpotifyDevice Device { get; set; }
+
+        [JsonPropertyName("shuffle_state")]
+        public bool ShuffleState { get; set; }
+
+        [JsonPropertyName("smart_shuffle")]
+        public bool SmartShuffle { get; set; }
+
+        [JsonPropertyName("repeat_state")]
+        public string RepeatState { get; set; }
+
+        [JsonPropertyName("is_playing")]
+        public bool IsPlaying { get; set; }
+
+        [JsonPropertyName("timestamp")]
+        public long Timestamp { get; set; }
+
+        [JsonPropertyName("context")]
+        public SpotifyContext Context { get; set; }
+
+        [JsonPropertyName("progress_ms")]
+        public int ProgressMs { get; set; }
+
+        [JsonPropertyName("item")]
+        public SpotifyTrack Item { get; set; }
+
+        [JsonPropertyName("currently_playing_type")]
+        public string CurrentlyPlayingType { get; set; }
+
+        [JsonPropertyName("actions")]
+        public SpotifyActions Actions { get; set; }
+    }
+
+public class SpotifyTrack
+{
+    [JsonPropertyName("album")]
+    public SpotifyAlbum Album { get; set; }
+
+    [JsonPropertyName("artists")]
+    public List<SpotifyArtist> Artists { get; set; }
+
+    [JsonPropertyName("disc_number")]
+    public int DiscNumber { get; set; }
+
+    [JsonPropertyName("duration_ms")]
+    public int DurationMs { get; set; }
+
+    [JsonPropertyName("explicit")]
+    public bool Explicit { get; set; }
+
+    [JsonPropertyName("external_urls")]
+    public ExternalUrls ExternalUrls { get; set; }
+
+    [JsonPropertyName("href")]
+    public string Href { get; set; }
+
+    [JsonPropertyName("id")]
+    public string Id { get; set; }
+
+    [JsonPropertyName("is_local")]
+    public bool IsLocal { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; }
+
+    [JsonPropertyName("preview_url")]
+    public string PreviewUrl { get; set; }
+
+    [JsonPropertyName("track_number")]
+    public int TrackNumber { get; set; }
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; }
+
+    [JsonPropertyName("uri")]
+    public string Uri { get; set; }
+}
+
+public class SpotifyContext
+    {
+        [JsonPropertyName("external_urls")]
+        public ExternalUrls ExternalUrls { get; set; }
+
+        [JsonPropertyName("href")]
+        public string Href { get; set; }
+
+        [JsonPropertyName("type")]
+        public string Type { get; set; }
+
+        [JsonPropertyName("uri")]
+        public string Uri { get; set; }
+    }
+
+    public class SpotifyActions
+    {
+        [JsonPropertyName("disallows")]
+        public SpotifyDisallows Disallows { get; set; }
+    }
+
+    public class SpotifyDisallows
+    {
+        [JsonPropertyName("resuming")]
+        public bool Resuming { get; set; }
+
+        [JsonPropertyName("toggling_repeat_context")]
+        public bool TogglingRepeatContext { get; set; }
+
+        [JsonPropertyName("toggling_repeat_track")]
+        public bool TogglingRepeatTrack { get; set; }
+
+        [JsonPropertyName("toggling_shuffle")]
+        public bool TogglingShuffle { get; set; }
+    }
+
+}
+

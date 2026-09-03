@@ -37,7 +37,6 @@
                 <button class="btn btn-sm btn-dark" @onclick="NextTrack">⏭</button>
             </div>
 
-            <!-- ⭐ PROGRESS BAR -->
             <div class="playerbar-progress w-100 mt-3">
                 <div class="progress-bg" @ref="progressBarRef" @onclick="Seek">
                     <div class="progress-fill" style="width:@ProgressPercent%"></div>
@@ -50,6 +49,16 @@
             </div>
 
         </div>
+
+        <!-- ⭐ Volume Popup FIRST so @ref is assigned -->
+        <div>
+            <VolumePopup @ref="VolumePopup" />
+        </div>
+
+        <!-- ⭐ Device Picker SECOND so callback is safe -->
+        <div>
+            <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
+        </div>
     }
     else
     {
@@ -59,10 +68,20 @@
 </div>
 
 @code {
+    private VolumePopup VolumePopup;
+
     private SpotifyNowPlaying? nowPlaying;
     private bool refreshLoopStarted = false;
 
     private ElementReference progressBarRef;
+
+    private async Task HandleDeviceChanged()
+    {
+        if (VolumePopup != null)
+        {
+            await VolumePopup.RefreshVolumeState();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,10 +173,6 @@
         return $"{ts.Minutes}:{ts.Seconds:D2}";
     }
 
-    // ---------------------------------------------------------
-    // PLAYER CONTROLS + TELEMETRY
-    // ---------------------------------------------------------
-
     private async Task PrevTrack()
     {
         if (Auth.State != LoginState.LoggedIn)
@@ -240,10 +255,6 @@
 
         StateHasChanged();
     }
-
-    // ---------------------------------------------------------
-    // SEEK SUPPORT (CLICK PROGRESS BAR)
-    // ---------------------------------------------------------
 
     private async Task Seek(MouseEventArgs e)
     {

@@ -497,3 +497,43 @@ a:hover {
     cursor: not-allowed;
 }
 
+/* Mobile layout */
+@media (max-width: 600px) {
+
+    .playerbar {
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center;
+    }
+
+    .player-controls-wrapper {
+        width: 100%;
+        align-items: center !important;
+    }
+
+    .playerbar-progress {
+        width: 100% !important;
+    }
+
+    /* Move Volume + Device buttons under everything */
+    .playerbar .volume-container,
+    .playerbar .device-picker-container {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        margin-top: 12px;
+    }
+
+    /* Make buttons larger on mobile */
+    .playerbar .btn {
+        padding: 10px 16px;
+        font-size: 1.1rem;
+    }
+
+    /* Album art scaling */
+    .playerbar-art {
+        width: 120px;
+        height: 120px;
+        margin-bottom: 10px;
+    }
+}

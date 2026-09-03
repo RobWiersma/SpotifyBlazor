@@ -7,7 +7,11 @@
 
 <h2 class="mb-3">Liked Songs</h2>
 
-@if (LikedSongs == null)
+@if (Auth.State != LoginState.LoggedIn)
+{
+    <p class="text-warning">You must be logged in to view your liked songs.</p>
+}
+else if (LikedSongs == null)
 {
     <p>Loading your liked songs…</p>
 }
@@ -76,30 +80,48 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadLikedSongs();
+        // Wait for login
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadLikedSongs();
+                StateHasChanged();
+            }
+        };
 
-        // 🔥 TELEMETRY: Liked Songs page loaded
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: "Liked Songs page loaded",
-            context: $"Offset: {_offset}, Limit: {_limit}",
-            page: "LikedSongsPage",
-            component: "LikedSongsList",
-            action: "PageLoaded"
-        );
+        // If already logged in (page reload)
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadLikedSongs();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: "Liked Songs page loaded",
+                context: $"Offset: {_offset}, Limit: {_limit}",
+                page: "LikedSongsPage",
+                component: "LikedSongsList",
+                action: "PageLoaded"
+            );
+        }
     }
 
     private async Task LoadLikedSongs()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         LikedSongs = await Auth.GetLikedSongsAsync(_offset, _limit);
     }
 
     private async Task NextPage()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         _offset += _limit;
         await LoadLikedSongs();
 
-        // 🔥 TELEMETRY: Next page
         await Telemetry.TrackAsync(
             level: "Info",
             message: "Liked Songs: Next page",
@@ -112,12 +134,14 @@ else
 
     private async Task PrevPage()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         _offset -= _limit;
         if (_offset < 0) _offset = 0;
 
         await LoadLikedSongs();
 
-        // 🔥 TELEMETRY: Previous page
         await Telemetry.TrackAsync(
             level: "Info",
             message: "Liked Songs: Previous page",
@@ -130,7 +154,9 @@ else
 
     private async Task PlayTrack(SpotifyTrack track)
     {
-        // 🔥 TELEMETRY: Track played
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played: {track?.Name}",
@@ -145,7 +171,9 @@ else
 
     private async Task OnAlbumClicked(SpotifyTrack track)
     {
-        // 🔥 TELEMETRY: Album clicked
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Album clicked: {track?.Album?.Name}",
@@ -160,7 +188,9 @@ else
 
     private async Task OnArtistClicked(SpotifyArtist artist)
     {
-        // 🔥 TELEMETRY: Artist clicked
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Artist clicked: {artist?.Name}",

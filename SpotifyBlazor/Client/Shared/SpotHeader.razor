@@ -7,40 +7,52 @@
 
 <div class="loginheader">
 
-        @if (Config.IsLoaded && string.IsNullOrEmpty(Auth.AccessToken))
-        {
-            <div class="px-3 py-2">
-                <button class="btn btn-success" @onclick="LoginToSpotify">
-                    Login with Spotify
-                </button>
-            </div>
-        }
-        else if (Config.IsLoaded && !string.IsNullOrEmpty(Auth.AccessToken))
-        {
-            <div class="px-3 py-2 text-success">
-                ✔ Logged in to Spotify 
-                @if (!string.IsNullOrEmpty(Auth.AccessToken))
-                {
-                    <button class="btn btn-danger btn-sm" @onclick="Logout">
-                        Logout
-                    </button>
-                }
-            </div>
-        }
-        else
-        {
-            <div class="px-3 py-2 text-warning">
-                Loading config…
-            </div>
-        }
+    @if (!Config.IsLoaded)
+    {
+        <div class="px-3 py-2 text-warning">
+            Loading config…
+        </div>
+    }
+    else if (Auth.State == LoginState.NotLoggedIn)
+    {
+        <div class="px-3 py-2">
+            <button class="btn btn-success" @onclick="LoginToSpotify">
+                Login with Spotify
+            </button>
+        </div>
+    }
+    else if (Auth.State == LoginState.LoggingIn)
+    {
+        <div class="px-3 py-2 text-info">
+            Connecting to Spotify…
+        </div>
+    }
+    else if (Auth.State == LoginState.LoginFailed)
+    {
+        <div class="px-3 py-2 text-danger">
+            Login failed
+            <button class="btn btn-success btn-sm" @onclick="LoginToSpotify">
+                Retry Login
+            </button>
+        </div>
+    }
+    else if (Auth.State == LoginState.LoggedIn)
+    {
+        <div class="px-3 py-2 text-success">
+            ✔ Logged in to Spotify
+            <button class="btn btn-danger btn-sm" @onclick="Logout">
+                Logout
+            </button>
+        </div>
+    }
 
 </div>
-    
 
 @code {
     protected override void OnInitialized()
     {
         Config.OnChange += StateHasChanged;
+        Auth.LoginStateChanged += _ => StateHasChanged();
     }
 
     private void LoginToSpotify()
@@ -48,7 +60,10 @@
         if (string.IsNullOrEmpty(Config.ClientId) || string.IsNullOrEmpty(Config.CallbackUri))
             return;
 
-        var scopes = "user-read-private user-read-email user-modify-playback-state user-read-playback-state user-read-currently-playing playlist-read-private user-library-read user-library-modify";
+        var scopes =
+            "user-read-private user-read-email " +
+            "user-modify-playback-state user-read-playback-state user-read-currently-playing " +
+            "playlist-read-private user-library-read user-library-modify";
 
         var url =
             $"https://accounts.spotify.com/authorize" +

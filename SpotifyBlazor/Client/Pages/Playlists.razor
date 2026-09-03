@@ -7,7 +7,11 @@
 
 <h3>Your Playlists</h3>
 
-@if (Playlistz == null)
+@if (Auth.State != LoginState.LoggedIn)
+{
+    <p class="text-warning">You must be logged in to view your playlists.</p>
+}
+else if (Playlistz == null)
 {
     <p>Loading playlists...</p>
 }
@@ -35,22 +39,45 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        Playlistz = await Auth.GetUserPlaylistsAsync();
+        // React to login state changes
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadPlaylists();
+                StateHasChanged();
+            }
+        };
 
-        // 🔥 TELEMETRY: Playlists page loaded
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: "Playlists page loaded",
-            context: $"Total playlists: {Playlistz?.Items?.Count}",
-            page: "PlaylistsPage",
-            component: "PlaylistGrid",
-            action: "PageLoaded"
-        );
+        // If already logged in (page reload)
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadPlaylists();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: "Playlists page loaded",
+                context: $"Total playlists: {Playlistz?.Items?.Count}",
+                page: "PlaylistsPage",
+                component: "PlaylistGrid",
+                action: "PageLoaded"
+            );
+        }
+    }
+
+    private async Task LoadPlaylists()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        Playlistz = await Auth.GetUserPlaylistsAsync();
     }
 
     private async Task OnPlaylistClicked(SpotifyPlaylist p)
     {
-        // 🔥 TELEMETRY: Playlist clicked
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Playlist clicked: {p.Name}",

@@ -8,12 +8,15 @@
 
 <h2>Search Results</h2>
 
-@if (IsSearching)
+@if (Auth.State != LoginState.LoggedIn)
+{
+    <p class="text-warning">You must be logged in to search.</p>
+}
+else if (IsSearching)
 {
     <p>Searching...</p>
 }
-
-@if (Results?.Any() == true)
+else if (Results?.Any() == true)
 {
     <div class="results">
         @foreach (var item in Results)
@@ -36,21 +39,35 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Wait for login
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await RunSearch();
+                StateHasChanged();
+            }
+        };
+
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         var q = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("q");
 
         if (q != Query)
         {
             Query = q;
-            await RunSearch();
+
+            if (Auth.State == LoginState.LoggedIn)
+                await RunSearch();
         }
     }
 
     async Task RunSearch()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         IsSearching = true;
 
-        // 🔥 TELEMETRY: Search executed
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Search executed: {Query}",
@@ -63,7 +80,6 @@
         var queryText = $"/api/search?q={Query}";
         Results = await Auth.SearchAsync(queryText);
 
-        // 🔥 TELEMETRY: Search results received
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Search results received: {Results.Count} items",
@@ -86,7 +102,9 @@
 
     void Navigate(SearchResult item)
     {
-        // 🔥 TELEMETRY: Search result clicked
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         Telemetry.TrackAsync(
             level: "Info",
             message: $"Search result clicked: {item.Name}",
@@ -115,7 +133,9 @@
 
     async Task Play(string id)
     {
-        // 🔥 TELEMETRY: Track played from search
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played from search: {id}",

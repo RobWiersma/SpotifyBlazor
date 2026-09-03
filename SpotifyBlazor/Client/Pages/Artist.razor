@@ -5,7 +5,11 @@
 @inject NavigationManager Navigation
 @inject TelemetryService Telemetry
 
-@if (artist == null)
+@if (Auth.State != LoginState.LoggedIn)
+{
+    <p class="text-warning">You must be logged in to view this artist.</p>
+}
+else if (artist == null)
 {
     <p>Loading artist...</p>
 }
@@ -37,8 +41,6 @@ else
         <div class="album-wrap">
             @foreach (var album in albumPage.Items)
             {
-                var albumUrl = $"/album/{album.Id}?from=artist";
-
                 <div class="album-item"
                      @onclick="() => OnAlbumClicked(album)">
                     <img src="@album.Images.FirstOrDefault()?.Url"
@@ -85,23 +87,46 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // React to login state changes
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadArtist();
+                StateHasChanged();
+            }
+        };
+
+        // If already logged in (page reload)
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadArtist();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: $"Artist selected: {artist?.Name}",
+                context: $"Genres: {string.Join(", ", artist?.Genres ?? new List<string>())}",
+                page: "ArtistPage",
+                component: "ArtistHeader",
+                action: "ArtistSelected"
+            );
+        }
+    }
+
+    private async Task LoadArtist()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         artist = await Auth.GetArtistAsync(ArtistId);
         albumPage = await Auth.GetArtistAlbumsPage(ArtistId, 0, 10);
-
-        // 🔥 TELEMETRY: Artist selected
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Artist selected: {artist?.Name}",
-            context: $"Genres: {string.Join(", ", artist?.Genres ?? new List<string>())}",
-            page: "ArtistPage",
-            component: "ArtistHeader",
-            action: "ArtistSelected"
-        );
     }
 
     private async Task OnAlbumClicked(SpotifyAlbum album)
     {
-        // 🔥 TELEMETRY: Album clicked from artist page
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Album clicked: {album.Name}",
@@ -116,11 +141,13 @@ else
 
     private async Task LoadNextPage()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         if (albumPage?.Next != null)
         {
             albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Next);
 
-            // 🔥 TELEMETRY: Pagination next
             await Telemetry.TrackAsync(
                 level: "Info",
                 message: $"Artist album page: Next",
@@ -134,11 +161,13 @@ else
 
     private async Task LoadPreviousPage()
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         if (albumPage?.Previous != null)
         {
             albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Previous);
 
-            // 🔥 TELEMETRY: Pagination previous
             await Telemetry.TrackAsync(
                 level: "Info",
                 message: $"Artist album page: Previous",
@@ -152,7 +181,9 @@ else
 
     private async Task Play(string uri)
     {
-        // Optional: track play telemetry
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played from artist page",

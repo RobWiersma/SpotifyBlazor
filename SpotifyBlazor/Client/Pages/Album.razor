@@ -5,7 +5,11 @@
 @inject NavigationManager Navigation
 @inject TelemetryService Telemetry
 
-@if (album == null)
+@if (Auth.State != LoginState.LoggedIn)
+{
+    <p class="text-warning">You must be logged in to view this album.</p>
+}
+else if (album == null)
 {
     <p>Loading...</p>
 }
@@ -45,36 +49,56 @@ else
 @code {
     [Parameter] public string AlbumId { get; set; }
     private SpotifyAlbum? album;
-    private SpotifyArtist artist;
+    private SpotifyArtist? artist;
 
     protected override async Task OnInitializedAsync()
     {
-        // Fetch album
+        // React to login state changes
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadAlbum();
+                StateHasChanged();
+            }
+        };
+
+        // If already logged in (page reload)
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadAlbum();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: $"Album selected: {album?.Name}",
+                context: $"Artist: {artist?.Name}",
+                page: "AlbumPage",
+                component: "AlbumDetails",
+                action: "AlbumSelected"
+            );
+        }
+    }
+
+    private async Task LoadAlbum()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         album = await Auth.GetAlbumAsync(AlbumId);
-
-        // Get primary artist
-        artist = album.Artists.FirstOrDefault();
-
-        // 🔥 TELEMETRY: Album selected
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Album selected: {album.Name}",
-            context: $"Artist: {artist?.Name}",
-            page: "AlbumPage",
-            component: "AlbumDetails",
-            action: "AlbumSelected"
-        );
+        artist = album?.Artists?.FirstOrDefault();
     }
 
     private async Task Play(SpotifyTrack track)
     {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         await Auth.PlayTrackAsync(track.Uri);
 
-        // 🔥 TELEMETRY: Track played
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played: {track.Name}",
-            context: $"Album: {album.Name}, Artist: {artist?.Name}",
+            context: $"Album: {album?.Name}, Artist: {artist?.Name}",
             page: "AlbumPage",
             component: "TrackList",
             action: "TrackPlayed"

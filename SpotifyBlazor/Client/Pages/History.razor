@@ -4,6 +4,7 @@
 @inject SpotifyAuthService Auth
 @inject TelemetryService Telemetry
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <h2 class="mb-3">Recently Played</h2>
 
@@ -22,7 +23,7 @@ else if (_history.Items.Count == 0)
 else
 {
     <ul class="track-list">
-        @foreach (var item in _history.Items)
+        @foreach (var item in PagedItems)
         {
             <li class="track-item">
 
@@ -66,11 +67,64 @@ else
             </li>
         }
     </ul>
+
+    <div class="d-flex gap-3 mt-4 justify-content-start">
+
+        <button class="btn btn-secondary"
+                disabled="@(CurrentPage == 0)"
+                @onclick="PrevPage">
+            Previous
+        </button>
+
+        <button class="btn btn-secondary"
+                disabled="@(CurrentPage >= TotalPages - 1)"
+                @onclick="NextPage">
+            Next
+        </button>
+
+    </div>
 }
 
 @code {
     private SpotifyPlayHistory? _history;
 
+    // ⭐ Pagination State
+    private int PageSize = 20;
+    private int CurrentPage = 0;
+
+    private int TotalPages =>
+        _history == null ? 1 : (int)Math.Ceiling(_history.Items.Count / (double)PageSize);
+
+    private IEnumerable<PlayHistoryItem> PagedItems =>
+        _history?.Items
+            .Skip(CurrentPage * PageSize)
+            .Take(PageSize)
+            ?? Enumerable.Empty<PlayHistoryItem>();
+
+    private async Task ScrollToTop()
+    {
+        await JS.InvokeVoidAsync("window.scrollTo", 0, 0);
+    }
+
+    private async Task NextPage()
+    {
+        if (CurrentPage < TotalPages - 1)
+        {
+            CurrentPage++;
+            await ScrollToTop();
+        }
+    }
+
+    private async Task PrevPage()
+    {
+        if (CurrentPage > 0)
+        {
+            CurrentPage--;
+            await ScrollToTop();
+        }
+    }
+
+    // ⭐ Load History
     protected override async Task OnInitializedAsync()
     {
         Auth.LoginStateChanged += async state =>
@@ -116,6 +170,7 @@ else
         );
     }
 
+    // ⭐ Track Actions
     private async Task PlayTrack(SpotifyTrack track)
     {
         if (Auth.State != LoginState.LoggedIn)

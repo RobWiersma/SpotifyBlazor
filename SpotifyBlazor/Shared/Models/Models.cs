@@ -816,5 +816,10 @@ public class SpotifyContext
         public DateTime PlayedAt { get; set; }
     }
 
+    public class SpotifyPlayHistoryItem
+    {
+        public SpotifyTrack Track { get; set; }
+        public DateTime PlayedAt { get; set; }
+    }
 }
 

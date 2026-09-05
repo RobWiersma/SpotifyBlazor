@@ -1174,4 +1174,24 @@ public class SpotifyAuthService
         }
     }
 
+    public async Task<SpotifyPlayHistory?> GetRecentlyPlayedAsync(int limit = 50)
+    {
+        await RefreshIfNeededAsync();
+
+        var url = $"https://api.spotify.com/v1/me/player/recently-played?limit={limit}";
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return null;
+
+        return await res.Content.ReadFromJsonAsync<SpotifyPlayHistory>();
     }
+
+}

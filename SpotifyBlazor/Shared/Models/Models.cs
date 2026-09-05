@@ -23,6 +23,8 @@ namespace SpotifyBlazor.Shared.Models
 
         [JsonPropertyName("token_type")]
         public string token_type { get; set; }
+        [JsonPropertyName("scope")]
+        public string scope { get; set; }
     }
 
     public class TokenResponse
@@ -31,6 +33,14 @@ namespace SpotifyBlazor.Shared.Models
         public DateTime ExpiresAt { get; set; }
         public string RefreshToken { get; set; }
 
+    }
+
+    public enum HistoryState
+    {
+        Loading,
+        NotLoggedIn,
+        Ready,
+        Error
     }
 
     public class RefreshRequest
@@ -793,6 +803,17 @@ public class SpotifyContext
 
         [JsonPropertyName("toggling_shuffle")]
         public bool TogglingShuffle { get; set; }
+    }
+
+    public class SpotifyPlayHistory
+    {
+        public List<PlayHistoryItem> Items { get; set; } = new();
+    }
+
+    public class PlayHistoryItem
+    {
+        public SpotifyTrack Track { get; set; }
+        public DateTime PlayedAt { get; set; }
     }
 
 }

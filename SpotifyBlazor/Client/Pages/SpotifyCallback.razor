@@ -80,6 +80,7 @@
 
         Console.WriteLine("Access Token: " + token?.access_token);
         Console.WriteLine("Refresh Token: " + token?.refresh_token);
+        Console.WriteLine("Scope: " + token?.scope);
 
         if (Auth.State == LoginState.LoggedIn)
         {

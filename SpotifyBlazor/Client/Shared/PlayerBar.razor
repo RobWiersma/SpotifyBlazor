@@ -5,7 +5,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 
-<div class="playerbar d-flex align-items-center gap-3 px-3 py-2">
+<div id="playerbar" class="playerbar d-flex align-items-center gap-3 px-3 py-2">
 
     @if (Auth.State != LoginState.LoggedIn)
     {
@@ -79,6 +79,21 @@
 </div>
 
 @code {
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (nowPlaying != null) // ensure DOM exists
+        {
+            if (_module == null)
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "/playerbar.js");
+            }
+
+            await _module.InvokeVoidAsync("updateHeight");
+        }
+    }
+
     private VolumePopup VolumePopup;
 
     private SpotifyNowPlaying? nowPlaying;
@@ -279,7 +294,8 @@
         if (Auth.State != LoginState.LoggedIn || nowPlaying?.Item == null)
             return;
 
-        var width = await JS.InvokeAsync<double>("getWidth", progressBarRef);
+        //var width = await JS.InvokeAsync<double>("getWidth", progressBarRef);
+        var width = await _module.InvokeAsync<double>("getWidth", progressBarRef);
 
         if (width <= 0)
             return;

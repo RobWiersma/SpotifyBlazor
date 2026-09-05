@@ -700,3 +700,11 @@ a:hover {
     flex-direction: column;
     gap: 12px;
 }
+
+:root {
+    --playerbar-height: 0px;
+}
+
+.content-root {
+    padding-bottom: calc(var(--playerbar-height) + 20px);
+}

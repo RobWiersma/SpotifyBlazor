@@ -1,0 +1,169 @@
+﻿@page "/history"
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject SpotifyAuthService Auth
+@inject TelemetryService Telemetry
+@inject NavigationManager Nav
+
+<h2 class="mb-3">Recently Played</h2>
+
+@if (Auth.State != LoginState.LoggedIn)
+{
+    <p class="text-warning">You must be logged in to view your recently played tracks.</p>
+}
+else if (_history == null)
+{
+    <p>Loading your recently played tracks…</p>
+}
+else if (_history.Items.Count == 0)
+{
+    <p>No recently played tracks found.</p>
+}
+else
+{
+    <ul class="track-list">
+        @foreach (var item in _history.Items)
+        {
+            <li class="track-item">
+
+                <div class="track-left">
+                    <img src="@(item.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
+                         class="track-cover"
+                         style="cursor:pointer"
+                         @onclick="@(() => OnAlbumClicked(item.Track))" />
+
+                    <div class="track-info">
+
+                        <div class="track-name"
+                             style="cursor:pointer"
+                             @onclick="@(() => PlayTrack(item.Track))">
+                            @item.Track?.Name
+                        </div>
+
+                        <div class="track-artist">
+                            @foreach (var artist in item.Track?.Artists ?? new List<SpotifyArtist>())
+                            {
+                                <span class="artist-link"
+                                      style="cursor:pointer; text-decoration:underline;"
+                                      @onclick="@(() => OnArtistClicked(artist))">
+                                    @artist.Name
+                                </span>
+
+                                @if (artist != item.Track.Artists.Last())
+                                {
+                                    <span>, </span>
+                                }
+                            }
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="track-duration">
+                    @item.PlayedAt.ToLocalTime().ToString("g")
+                </div>
+
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private SpotifyPlayHistory? _history;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadHistory();
+                StateHasChanged();
+            }
+        };
+
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadHistory();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: "History page loaded",
+                context: null,
+                page: "HistoryPage",
+                component: "HistoryList",
+                action: "PageLoaded"
+            );
+        }
+    }
+
+    private async Task LoadHistory()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        await Telemetry.TrackTimedAsync(
+            "Info",
+            "History.LoadRecentlyPlayed",
+            async () =>
+            {
+                _history = await Auth.GetRecentlyPlayedAsync();
+            },
+            context: "Fetching recently played tracks",
+            page: "HistoryPage",
+            component: "HistoryList",
+            actionName: "LoadRecentlyPlayed"
+        );
+    }
+
+    private async Task PlayTrack(SpotifyTrack track)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Track played: {track?.Name}",
+            context: $"Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
+            page: "HistoryPage",
+            component: "TrackList",
+            action: "TrackPlayed"
+        );
+
+        await Auth.PlayTrackAsync(track.Uri);
+    }
+
+    private async Task OnAlbumClicked(SpotifyTrack track)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Album clicked: {track?.Album?.Name}",
+            context: $"Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
+            page: "HistoryPage",
+            component: "AlbumLink",
+            action: "AlbumClicked"
+        );
+
+        Nav.NavigateTo($"/album/{track?.Album?.Id}");
+    }
+
+    private async Task OnArtistClicked(SpotifyArtist artist)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Artist clicked: {artist?.Name}",
+            context: null,
+            page: "HistoryPage",
+            component: "ArtistLink",
+            action: "ArtistClicked"
+        );
+
+        Nav.NavigateTo($"/artist/{artist.Id}");
+    }
+}

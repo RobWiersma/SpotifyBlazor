@@ -1,5 +1,6 @@
 using Microsoft.ApplicationInsights;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Serilog.Core;
 using SpotifyBlazor.Shared.Models;
@@ -8,7 +9,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using static System.Net.WebRequestMethods;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,15 +48,70 @@ builder.Services
         };
     });
 
-var loggerFactory = LoggerFactory.Create(logging =>
-{
-    logging.AddConsole();
-    logging.AddDebug();
-});
-
-
-
 builder.Services.AddAuthorization();
+
+// ----------------------------------------------------
+// RATE LIMITING (burst + steady via stacked policies)
+// ----------------------------------------------------
+builder.Services.AddRateLimiter(options =>
+{
+    // Global steady limit: 100 req/min per IP
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Burst limiter for token endpoints
+    options.AddPolicy<string>("TokenBurst", httpContext =>
+        RateLimitPartition.GetConcurrencyLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new ConcurrencyLimiterOptions
+            {
+                PermitLimit = 2,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // Steady limiter for token endpoints
+    options.AddPolicy<string>("TokenSteady", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // Burst limiter for telemetry
+    options.AddPolicy<string>("TelemetryBurst", httpContext =>
+        RateLimitPartition.GetConcurrencyLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new ConcurrencyLimiterOptions
+            {
+                PermitLimit = 5,
+                QueueLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // Steady limiter for telemetry
+    options.AddPolicy<string>("TelemetrySteady", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+});
 
 var app = builder.Build();
 
@@ -89,6 +145,9 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// ⭐ Enable rate limiting middleware
+app.UseRateLimiter();
+
 // -----------------------------
 // PUBLIC ENDPOINTS
 // -----------------------------
@@ -102,6 +161,7 @@ app.MapGet("/api/config", (IConfiguration config) =>
     };
 });
 
+// TOKEN EXCHANGE (burst + steady)
 app.MapPost("/api/spotify/exchange", async (
     IConfiguration config,
     IHttpClientFactory httpFactory,
@@ -134,9 +194,11 @@ app.MapPost("/api/spotify/exchange", async (
     var token = JsonSerializer.Deserialize<TokenResponseFull>(raw);
 
     return Results.Ok(token);
-});
+})
+.RequireRateLimiting("TokenBurst")
+.RequireRateLimiting("TokenSteady");
 
-
+// REFRESH TOKEN (burst + steady)
 app.MapPost("/api/spotify/refresh", async (
     IHttpClientFactory httpFactory,
     IConfiguration config,
@@ -160,8 +222,11 @@ app.MapPost("/api/spotify/refresh", async (
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
     return Results.Ok(json);
-});
+})
+.RequireRateLimiting("TokenBurst")
+.RequireRateLimiting("TokenSteady");
 
+// JWT MINT (burst + steady)
 app.MapPost("/api/auth/spotify-login", async (
     IConfiguration config,
     IHttpClientFactory httpFactory,
@@ -217,12 +282,15 @@ app.MapPost("/api/auth/spotify-login", async (
     logger.LogWarning("JWT MINT → Successfully minted JWT length {Len}", jwt.Length);
 
     return Results.Ok(new { jwt });
-});
+})
+.RequireRateLimiting("TokenBurst")
+.RequireRateLimiting("TokenSteady");
 
 // Protected endpoints
 app.MapGet("/api/logtest", () => Results.Ok("Log test executed"))
    .RequireAuthorization();
 
+// TELEMETRY (burst + steady)
 app.MapPost("/api/telemetry", async (
     TelemetryEvent evt,
     ClaimsPrincipal user,
@@ -253,7 +321,9 @@ app.MapPost("/api/telemetry", async (
 
     return Results.Accepted();
 })
-.RequireAuthorization();
+.RequireAuthorization()
+.RequireRateLimiting("TelemetryBurst")
+.RequireRateLimiting("TelemetrySteady");
 
 app.MapGet("/env", (IConfiguration config) =>
 {
@@ -264,7 +334,6 @@ app.MapGet("/env", (IConfiguration config) =>
         JwtIssuer = config["Jwt:Issuer"],
         JwtKeyLen = config["Jwt:Key"]?.Length,
         ConnStringsClientId = config["ConnectionStrings:clientId"],
-        //ConnStringsClientSecret = config["ConnectionStrings:clientSecret"],
         ConnStringsCallbackUri = config["ConnectionStrings:callbackUri"]
     };
 });

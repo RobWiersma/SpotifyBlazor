@@ -5,41 +5,45 @@
 @inject NavigationManager Nav
 @inject TelemetryService Telemetry
 
-<h3>Your Playlists</h3>
+<AnimatedPage>
+    <h3>Your Playlists</h3>
 
-@if (Auth.State != LoginState.LoggedIn)
-{
-    <p class="text-warning">You must be logged in to view your playlists.</p>
-}
-else if (Playlistz == null)
-{
-    <p>Loading playlists...</p>
-}
-else
-{
-    <div class="playlist-grid">
-        @foreach (var p in Playlistz.Items)
-        {
-            <div class="playlist-card"
-                 @onclick="@(() => OnPlaylistClicked(p))">
+    @if (Auth.State != LoginState.LoggedIn)
+    {
+        <p class="text-warning">You must be logged in to view your playlists.</p>
+    }
+    else if (Playlistz == null)
+    {
+        <p>Loading playlists...</p>
+    }
+    else
+    {
+        <div class="playlist-grid">
+            @foreach (var p in Playlistz.Items)
+            {
+                <div class="playlist-card @( _animatedPlaylists.Contains(p.Id) ? "playlist-card-loaded" : "" )"
+                     @onclick="@(() => OnPlaylistClicked(p))">
 
-                <img src="@p.Images?.FirstOrDefault()?.Url"
-                     class="playlist-cover" />
+                    <img src="@p.Images?.FirstOrDefault()?.Url"
+                         class="playlist-cover" />
 
-                <div class="playlist-name">@p.Name</div>
-                <div class="playlist-owner">@p.Owner.DisplayName</div>
-                <div class="playlist-count">@p.Items.Total tracks</div>
-            </div>
-        }
-    </div>
-}
+                    <div class="playlist-name">@p.Name</div>
+                    <div class="playlist-owner">@p.Owner.DisplayName</div>
+                    <div class="playlist-count">@p.Items.Total tracks</div>
+                </div>
+            }
+        </div>
+    }
+</AnimatedPage>
 
 @code {
     public SpotifyPlaylistResponse? Playlistz { get; set; }
 
+    // ⭐ Animation state
+    private HashSet<string> _animatedPlaylists = new();
+
     protected override async Task OnInitializedAsync()
     {
-        // React to login state changes
         Auth.LoginStateChanged += async state =>
         {
             if (state == LoginState.LoggedIn)
@@ -49,7 +53,6 @@ else
             }
         };
 
-        // If already logged in (page reload)
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadPlaylists();
@@ -71,6 +74,12 @@ else
             return;
 
         Playlistz = await Auth.GetUserPlaylistsAsync();
+
+        // ⭐ Mark playlists for animation
+        _animatedPlaylists = Playlistz.Items
+            .Select(p => p.Id)
+            .Where(id => id != null)
+            .ToHashSet();
     }
 
     private async Task OnPlaylistClicked(SpotifyPlaylist p)

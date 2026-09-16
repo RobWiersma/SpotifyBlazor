@@ -16,3 +16,10 @@ window.addEventListener("resize", () => {
     if (el) updateHeight();
 });
 
+export function showPlayerBar() {
+    document.querySelector('.playerbar').classList.add('playerbar-visible');
+}
+
+export function hidePlayerBar() {
+    document.querySelector('.playerbar').classList.remove('playerbar-visible');
+}

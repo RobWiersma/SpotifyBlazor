@@ -1,76 +1,78 @@
 ﻿@page "/playlist/{PlaylistId}"
-@using SpotifyBlazor.Client.Services;
-@using SpotifyBlazor.Shared.Models;
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
 @inject NavigationManager Nav
 @inject TelemetryService Telemetry
 
-<h3>Playlist Details</h3>
+<AnimatedPage>
+    <h3>Playlist Details</h3>
 
-@if (Playlist == null)
-{
-    <p>Loading playlist...</p>
-}
-else
-{
-    <div class="playlist-details-header">
-        <img src="@Playlist.Images?.FirstOrDefault()?.Url"
-             class="playlist-details-cover" />
+    @if (Playlist == null)
+    {
+        <p>Loading playlist...</p>
+    }
+    else
+    {
+        <div class="playlist-details-header @(HeaderLoaded ? "playlist-details-header-loaded" : "")">
+            <img src="@Playlist.Images?.FirstOrDefault()?.Url"
+                 class="playlist-details-cover" />
 
-        <div class="playlist-details-info">
-            <h2>@Playlist.Name</h2>
-            <p>@Playlist.Description</p>
-            <p><strong>Owner:</strong> @Playlist.Owner.DisplayName</p>
-            <p><strong>Total Tracks:</strong> @Tracks.Count</p>
+            <div class="playlist-details-info">
+                <h2>@Playlist.Name</h2>
+                <p>@Playlist.Description</p>
+                <p><strong>Owner:</strong> @Playlist.Owner.DisplayName</p>
+                <p><strong>Total Tracks:</strong> @Tracks.Count</p>
+            </div>
         </div>
-    </div>
 
-    <h3>Tracks</h3>
+        <h3>Tracks</h3>
 
-    <ul class="track-list">
-        @foreach (var t in Tracks)
-        {
-            <li class="track-item">
+        <ul class="track-list">
+            @foreach (var t in Tracks)
+            {
+                <li class="track-item @( _animatedTracks.Contains(t.Track?.Id) ? "track-item-loaded" : "" )">
 
-                <div class="track-left">
-                    <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                         class="track-cover"
-                         style="cursor:pointer"
-                         @onclick="@(() => OnAlbumClicked(t.Track))" />
-
-                    <div class="track-info">
-                        <div class="track-name"
+                    <div class="track-left">
+                        <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
+                             class="track-cover"
                              style="cursor:pointer"
-                             @onclick="@(() => PlayTrack(t.Track))">
-                            @t.Track?.Name
-                        </div>
+                             @onclick="@(() => OnAlbumClicked(t.Track))" />
 
-                        <div class="track-artist">
-                            @foreach (var artist in t.Track?.Artists ?? new List<SimpleArtist>())
-                            {
-                                <span class="artist-link"
-                                      style="cursor:pointer; text-decoration:underline;"
-                                      @onclick="@(() => OnArtistClicked(artist))">
-                                    @artist.Name
-                                </span>
+                        <div class="track-info">
+                            <div class="track-name"
+                                 style="cursor:pointer"
+                                 @onclick="@(() => PlayTrack(t.Track))">
+                                @t.Track?.Name
+                            </div>
 
-                                @if (artist != t.Track.Artists.Last())
+                            <div class="track-artist">
+                                @foreach (var artist in t.Track?.Artists ?? new List<SimpleArtist>())
                                 {
-                                    <span>, </span>
+                                    <span class="artist-link"
+                                          style="cursor:pointer; text-decoration:underline;"
+                                          @onclick="@(() => OnArtistClicked(artist))">
+                                        @artist.Name
+                                    </span>
+
+                                    @if (artist != t.Track.Artists.Last())
+                                    {
+                                        <span>, </span>
+                                    }
                                 }
-                            }
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="track-duration">
-                    @FormatDuration(t.Track?.DurationMs ?? 0)
-                </div>
+                    <div class="track-duration">
+                        @FormatDuration(t.Track?.DurationMs ?? 0)
+                    </div>
 
-            </li>
-        }
-    </ul>
-}
+                </li>
+            }
+        </ul>
+    }
+</AnimatedPage>
 
 @code {
     [Parameter] public string PlaylistId { get; set; }
@@ -78,10 +80,23 @@ else
     public SpotifyPlaylist Playlist { get; set; }
     public List<PlaylistTrackItem> Tracks { get; set; } = new();
 
+    // ⭐ Animation state
+    private HashSet<string> _animatedTracks = new();
+    private bool HeaderLoaded = false;
+
     protected override async Task OnInitializedAsync()
     {
         Playlist = await Auth.GetPlaylistAsync(PlaylistId);
         Tracks = await Auth.GetPlaylistTracksAsync(PlaylistId);
+
+        // Mark header as animated
+        HeaderLoaded = true;
+
+        // Mark tracks for animation
+        _animatedTracks = Tracks
+            .Select(t => t.Track?.Id)
+            .Where(id => id != null)
+            .ToHashSet();
 
         // 🔥 TELEMETRY: Playlist loaded
         await Telemetry.TrackAsync(
@@ -96,7 +111,6 @@ else
 
     private async Task PlayTrack(PlaylistTrack track)
     {
-        // 🔥 TELEMETRY: Track played
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played: {track?.Name}",
@@ -111,7 +125,6 @@ else
 
     private async Task OnAlbumClicked(PlaylistTrack track)
     {
-        // 🔥 TELEMETRY: Album clicked
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Album clicked: {track?.Album?.Name}",
@@ -126,7 +139,6 @@ else
 
     private async Task OnArtistClicked(SimpleArtist artist)
     {
-        // 🔥 TELEMETRY: Artist clicked
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Artist clicked: {artist?.Name}",

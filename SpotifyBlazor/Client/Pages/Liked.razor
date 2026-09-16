@@ -5,82 +5,86 @@
 @inject TelemetryService Telemetry
 @inject NavigationManager Nav
 
-<h2 class="mb-3">Liked Songs</h2>
+<AnimatedPage>
+    <h2 class="mb-3">Liked Songs</h2>
 
-@if (Auth.State != LoginState.LoggedIn)
-{
-    <p class="text-warning">You must be logged in to view your liked songs.</p>
-}
-else if (LikedSongs == null)
-{
-    <p>Loading your liked songs…</p>
-}
-else if (LikedSongs.Items.Count == 0)
-{
-    <p>You have no liked songs.</p>
-}
-else
-{
-    <ul class="track-list">
-        @foreach (var t in LikedSongs.Items)
-        {
-            <li class="track-item">
+    @if (Auth.State != LoginState.LoggedIn)
+    {
+        <p class="text-warning">You must be logged in to view your liked songs.</p>
+    }
+    else if (LikedSongs == null)
+    {
+        <p>Loading your liked songs…</p>
+    }
+    else if (LikedSongs.Items.Count == 0)
+    {
+        <p>You have no liked songs.</p>
+    }
+    else
+    {
+        <ul class="track-list">
+            @foreach (var t in LikedSongs.Items)
+            {
+                <li class="track-item @( _animatedTracks.Contains(t.Track?.Id) ? "track-item-loaded" : "" )">
 
-                <div class="track-left">
-                    <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                         class="track-cover"
-                         style="cursor:pointer"
-                         @onclick="@(() => OnAlbumClicked(t.Track))" />
-
-                    <div class="track-info">
-
-                        <div class="track-name"
+                    <div class="track-left">
+                        <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
+                             class="track-cover"
                              style="cursor:pointer"
-                             @onclick="@(() => PlayTrack(t.Track))">
-                            @t.Track?.Name
-                        </div>
+                             @onclick="@(() => OnAlbumClicked(t.Track))" />
 
-                        <div class="track-artist">
-                            @foreach (var artist in t.Track?.Artists ?? new List<SpotifyArtist>())
-                            {
-                                <span class="artist-link"
-                                      style="cursor:pointer; text-decoration:underline;"
-                                      @onclick="@(() => OnArtistClicked(artist))">
-                                    @artist.Name
-                                </span>
+                        <div class="track-info">
 
-                                @if (artist != t.Track.Artists.Last())
+                            <div class="track-name"
+                                 style="cursor:pointer"
+                                 @onclick="@(() => PlayTrack(t.Track))">
+                                @t.Track?.Name
+                            </div>
+
+                            <div class="track-artist">
+                                @foreach (var artist in t.Track?.Artists ?? new List<SpotifyArtist>())
                                 {
-                                    <span>, </span>
+                                    <span class="artist-link"
+                                          style="cursor:pointer; text-decoration:underline;"
+                                          @onclick="@(() => OnArtistClicked(artist))">
+                                        @artist.Name
+                                    </span>
+
+                                    @if (artist != t.Track.Artists.Last())
+                                    {
+                                        <span>, </span>
+                                    }
                                 }
-                            }
+                            </div>
+
                         </div>
-
                     </div>
-                </div>
 
-                <div class="track-duration">
-                    @FormatDuration(t.Track?.DurationMs ?? 0)
-                </div>
+                    <div class="track-duration">
+                        @FormatDuration(t.Track?.DurationMs ?? 0)
+                    </div>
 
-            </li>
-        }
-    </ul>
+                </li>
+            }
+        </ul>
 
-    <div class="d-flex gap-3 mt-4">
-        <button class="btn btn-secondary" disabled="@(_offset == 0)" @onclick="PrevPage">Previous</button>
-        <button class="btn btn-secondary" disabled="@(_offset + _limit >= LikedSongs.Total)" @onclick="NextPage">Next</button>
-    </div>
-}
+        <div class="d-flex gap-3 mt-4">
+            <button class="btn btn-secondary" disabled="@(_offset == 0)" @onclick="PrevPage">Previous</button>
+            <button class="btn btn-secondary" disabled="@(_offset + _limit >= LikedSongs.Total)" @onclick="NextPage">Next</button>
+        </div>
+    }
+</AnimatedPage>
 
 @code {
     private SpotifyLikedSongs? LikedSongs;
     private int _offset = 0;
     private int _limit = 50;
 
+    // Track IDs that should animate
+    private HashSet<string> _animatedTracks = new();
+
     protected override async Task OnInitializedAsync()
     {
-        // Wait for login
         Auth.LoginStateChanged += async state =>
         {
             if (state == LoginState.LoggedIn)
@@ -90,7 +94,6 @@ else
             }
         };
 
-        // If already logged in (page reload)
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadLikedSongs();
@@ -112,6 +115,12 @@ else
             return;
 
         LikedSongs = await Auth.GetLikedSongsAsync(_offset, _limit);
+
+        // Mark all tracks as ready to animate
+        _animatedTracks = LikedSongs.Items
+            .Select(i => i.Track?.Id)
+            .Where(id => id != null)
+            .ToHashSet();
     }
 
     private async Task NextPage()

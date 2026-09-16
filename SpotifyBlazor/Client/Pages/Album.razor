@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject TelemetryService Telemetry
 
+<AnimatedPage>
 @if (Auth.State != LoginState.LoggedIn)
 {
     <p class="text-warning">You must be logged in to view this album.</p>
@@ -45,6 +46,7 @@ else
         }
     </ul>
 }
+</AnimatedPage>
 
 @code {
     [Parameter] public string AlbumId { get; set; }

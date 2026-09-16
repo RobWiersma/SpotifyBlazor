@@ -1,0 +1,18 @@
+﻿<div class="@CssClass">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public RenderFragment ChildContent { get; set; }
+    private string CssClass = "page-enter";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Task.Delay(10);
+            CssClass = "page-enter page-enter-active";
+            StateHasChanged();
+        }
+    }
+}

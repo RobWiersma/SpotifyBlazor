@@ -5,79 +5,81 @@
 @inject NavigationManager Navigation
 @inject TelemetryService Telemetry
 
-@if (Auth.State != LoginState.LoggedIn)
-{
-    <p class="text-warning">You must be logged in to view this artist.</p>
-}
-else if (artist == null)
-{
-    <p>Loading artist...</p>
-}
-else
-{
-    <div class="d-flex gap-4">
-
-        <img src="@artist.Images.FirstOrDefault()?.Url"
-             style="width:220px; border-radius:8px;" />
-
-        <div>
-            <h3>@artist.Name</h3>
-            @if (artist.Followers != null)
-            {
-                <p><strong>Followers:</strong> @artist.Followers.Total</p>
-            }
-
-            @if (artist.Genres != null && artist.Genres.Any())
-            {
-                <p><strong>Genres:</strong> @string.Join(", ", artist.Genres)</p>
-            }
-        </div>
-    </div>
-
-    @if (albumPage != null && albumPage.Items.Any())
+<AnimatedPage>
+    @if (Auth.State != LoginState.LoggedIn)
     {
-        <h3 class="mt-4 mb-3">Albums</h3>
-
-        <div class="album-wrap">
-            @foreach (var album in albumPage.Items)
-            {
-                <div class="album-item"
-                     @onclick="() => OnAlbumClicked(album)">
-                    <img src="@album.Images.FirstOrDefault()?.Url"
-                         alt="@album.Name"
-                         class="album-cover-small" />
-
-                    <div class="album-title">@album.Name</div>
-                    <div class="album-date">@album.ReleaseDate</div>
-                </div>
-            }
-        </div>
-
-        <div class="pagination-controls d-flex align-items-center gap-3 mt-3">
-
-            @if (albumPage.Previous != null)
-            {
-                <button class="btn btn-secondary"
-                        @onclick="LoadPreviousPage">
-                    Previous
-                </button>
-            }
-
-            @if (albumPage.Next != null)
-            {
-                <button class="btn btn-secondary"
-                        @onclick="LoadNextPage">
-                    Next
-                </button>
-            }
-
-            <span>
-                Page @(albumPage.Offset / albumPage.Limit + 1)
-                of @((int)Math.Ceiling((double)albumPage.Total / albumPage.Limit))
-            </span>
-        </div>
+        <p class="text-warning">You must be logged in to view this artist.</p>
     }
-}
+    else if (artist == null)
+    {
+        <p>Loading artist...</p>
+    }
+    else
+    {
+        <div class="d-flex gap-4 artist-header @(HeaderLoaded ? "artist-header-loaded" : "")">
+
+            <img src="@artist.Images.FirstOrDefault()?.Url"
+                 style="width:220px; border-radius:8px;" />
+
+            <div>
+                <h3>@artist.Name</h3>
+                @if (artist.Followers != null)
+                {
+                    <p><strong>Followers:</strong> @artist.Followers.Total</p>
+                }
+
+                @if (artist.Genres != null && artist.Genres.Any())
+                {
+                    <p><strong>Genres:</strong> @string.Join(", ", artist.Genres)</p>
+                }
+            </div>
+        </div>
+
+        @if (albumPage != null && albumPage.Items.Any())
+        {
+            <h3 class="mt-4 mb-3">Albums</h3>
+
+            <div class="album-wrap">
+                @foreach (var album in albumPage.Items)
+                {
+                    <div class="album-item @( _animatedAlbums.Contains(album.Id) ? "album-item-loaded" : "" )"
+                         @onclick="() => OnAlbumClicked(album)">
+                        <img src="@album.Images.FirstOrDefault()?.Url"
+                             alt="@album.Name"
+                             class="album-cover-small" />
+
+                        <div class="album-title">@album.Name</div>
+                        <div class="album-date">@album.ReleaseDate</div>
+                    </div>
+                }
+            </div>
+
+            <div class="pagination-controls d-flex align-items-center gap-3 mt-3">
+
+                @if (albumPage.Previous != null)
+                {
+                    <button class="btn btn-secondary"
+                            @onclick="LoadPreviousPage">
+                        Previous
+                    </button>
+                }
+
+                @if (albumPage.Next != null)
+                {
+                    <button class="btn btn-secondary"
+                            @onclick="LoadNextPage">
+                        Next
+                    </button>
+                }
+
+                <span>
+                    Page @(albumPage.Offset / albumPage.Limit + 1)
+                    of @((int)Math.Ceiling((double)albumPage.Total / albumPage.Limit))
+                </span>
+            </div>
+        }
+    }
+</AnimatedPage>
 
 @code {
     [Parameter] public string ArtistId { get; set; }
@@ -85,9 +87,12 @@ else
     private SpotifyArtistFull? artist;
     private SpotifyPaging<SpotifyAlbum>? albumPage;
 
+    // ⭐ Animation state
+    private bool HeaderLoaded = false;
+    private HashSet<string> _animatedAlbums = new();
+
     protected override async Task OnInitializedAsync()
     {
-        // React to login state changes
         Auth.LoginStateChanged += async state =>
         {
             if (state == LoginState.LoggedIn)
@@ -97,7 +102,6 @@ else
             }
         };
 
-        // If already logged in (page reload)
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadArtist();
@@ -120,13 +124,17 @@ else
 
         artist = await Auth.GetArtistAsync(ArtistId);
         albumPage = await Auth.GetArtistAlbumsPage(ArtistId, 0, 10);
+
+        // Mark header + albums for animation
+        HeaderLoaded = true;
+        _animatedAlbums = albumPage.Items
+            .Select(a => a.Id)
+            .Where(id => id != null)
+            .ToHashSet();
     }
 
     private async Task OnAlbumClicked(SpotifyAlbum album)
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Album clicked: {album.Name}",
@@ -141,12 +149,14 @@ else
 
     private async Task LoadNextPage()
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
         if (albumPage?.Next != null)
         {
             albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Next);
+
+            _animatedAlbums = albumPage.Items
+                .Select(a => a.Id)
+                .Where(id => id != null)
+                .ToHashSet();
 
             await Telemetry.TrackAsync(
                 level: "Info",
@@ -161,12 +171,14 @@ else
 
     private async Task LoadPreviousPage()
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
         if (albumPage?.Previous != null)
         {
             albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Previous);
+
+            _animatedAlbums = albumPage.Items
+                .Select(a => a.Id)
+                .Where(id => id != null)
+                .ToHashSet();
 
             await Telemetry.TrackAsync(
                 level: "Info",
@@ -181,9 +193,6 @@ else
 
     private async Task Play(string uri)
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played from artist page",

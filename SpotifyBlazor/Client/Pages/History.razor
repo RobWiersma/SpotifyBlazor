@@ -6,84 +6,86 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<h2 class="mb-3">Recently Played</h2>
+<AnimatedPage>
+    <h2 class="mb-3">Recently Played</h2>
 
-@if (Auth.State != LoginState.LoggedIn)
-{
-    <p class="text-warning">You must be logged in to view your recently played tracks.</p>
-}
-else if (_history == null)
-{
-    <p>Loading your recently played tracks…</p>
-}
-else if (_history.Items.Count == 0)
-{
-    <p>No recently played tracks found.</p>
-}
-else
-{
-    <ul class="track-list">
-        @foreach (var item in PagedItems)
-        {
-            <li class="track-item">
+    @if (Auth.State != LoginState.LoggedIn)
+    {
+        <p class="text-warning">You must be logged in to view your recently played tracks.</p>
+    }
+    else if (_history == null)
+    {
+        <p>Loading your recently played tracks…</p>
+    }
+    else if (_history.Items.Count == 0)
+    {
+        <p>No recently played tracks found.</p>
+    }
+    else
+    {
+        <ul class="track-list">
+            @foreach (var item in PagedItems)
+            {
+                <li class="track-item @( _animatedTracks.Contains(item.Track?.Id) ? "track-item-loaded" : "" )">
 
-                <div class="track-left">
-                    <img src="@(item.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                         class="track-cover"
-                         style="cursor:pointer"
-                         @onclick="@(() => OnAlbumClicked(item.Track))" />
-
-                    <div class="track-info">
-
-                        <div class="track-name"
+                    <div class="track-left">
+                        <img src="@(item.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
+                             class="track-cover"
                              style="cursor:pointer"
-                             @onclick="@(() => PlayTrack(item.Track))">
-                            @item.Track?.Name
-                        </div>
+                             @onclick="@(() => OnAlbumClicked(item.Track))" />
 
-                        <div class="track-artist">
-                            @foreach (var artist in item.Track?.Artists ?? new List<SpotifyArtist>())
-                            {
-                                <span class="artist-link"
-                                      style="cursor:pointer; text-decoration:underline;"
-                                      @onclick="@(() => OnArtistClicked(artist))">
-                                    @artist.Name
-                                </span>
+                        <div class="track-info">
 
-                                @if (artist != item.Track.Artists.Last())
+                            <div class="track-name"
+                                 style="cursor:pointer"
+                                 @onclick="@(() => PlayTrack(item.Track))">
+                                @item.Track?.Name
+                            </div>
+
+                            <div class="track-artist">
+                                @foreach (var artist in item.Track?.Artists ?? new List<SpotifyArtist>())
                                 {
-                                    <span>, </span>
+                                    <span class="artist-link"
+                                          style="cursor:pointer; text-decoration:underline;"
+                                          @onclick="@(() => OnArtistClicked(artist))">
+                                        @artist.Name
+                                    </span>
+
+                                    @if (artist != item.Track.Artists.Last())
+                                    {
+                                        <span>, </span>
+                                    }
                                 }
-                            }
+                            </div>
+
                         </div>
-
                     </div>
-                </div>
 
-                <div class="track-duration">
-                    @item.PlayedAt.ToLocalTime().ToString("g")
-                </div>
+                    <div class="track-duration">
+                        @item.PlayedAt.ToLocalTime().ToString("g")
+                    </div>
 
-            </li>
-        }
-    </ul>
+                </li>
+            }
+        </ul>
 
-    <div class="d-flex gap-3 mt-4 justify-content-start">
+        <div class="d-flex gap-3 mt-4 justify-content-start">
 
-        <button class="btn btn-secondary"
-                disabled="@(CurrentPage == 0)"
-                @onclick="PrevPage">
-            Previous
-        </button>
+            <button class="btn btn-secondary"
+                    disabled="@(CurrentPage == 0)"
+                    @onclick="PrevPage">
+                Previous
+            </button>
 
-        <button class="btn btn-secondary"
-                disabled="@(CurrentPage >= TotalPages - 1)"
-                @onclick="NextPage">
-            Next
-        </button>
+            <button class="btn btn-secondary"
+                    disabled="@(CurrentPage >= TotalPages - 1)"
+                    @onclick="NextPage">
+                Next
+            </button>
 
-    </div>
-}
+        </div>
+    }
+</AnimatedPage>
 
 @code {
     private SpotifyPlayHistory? _history;
@@ -101,6 +103,9 @@ else
             .Take(PageSize)
             ?? Enumerable.Empty<PlayHistoryItem>();
 
+    // ⭐ Animation State
+    private HashSet<string> _animatedTracks = new();
+
     private async Task ScrollToTop()
     {
         await JS.InvokeVoidAsync("window.scrollTo", 0, 0);
@@ -111,6 +116,7 @@ else
         if (CurrentPage < TotalPages - 1)
         {
             CurrentPage++;
+            MarkPageForAnimation();
             await ScrollToTop();
         }
     }
@@ -120,8 +126,17 @@ else
         if (CurrentPage > 0)
         {
             CurrentPage--;
+            MarkPageForAnimation();
             await ScrollToTop();
         }
+    }
+
+    private void MarkPageForAnimation()
+    {
+        _animatedTracks = PagedItems
+            .Select(i => i.Track?.Id)
+            .Where(id => id != null)
+            .ToHashSet();
     }
 
     // ⭐ Load History
@@ -168,6 +183,8 @@ else
             component: "HistoryList",
             actionName: "LoadRecentlyPlayed"
         );
+
+        MarkPageForAnimation();
     }
 
     // ⭐ Track Actions

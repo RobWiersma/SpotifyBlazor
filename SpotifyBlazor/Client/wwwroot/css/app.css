@@ -763,3 +763,245 @@ a:hover {
     box-shadow: 0 -2px 8px rgba(0,0,0,0.5);
     z-index: 1000;
 }
+
+/* Fullscreen container */
+.np-container {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 80px); /* leave room for playerbar */
+    overflow: hidden;
+}
+
+/* Background blur */
+.np-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: blur(40px) brightness(0.4);
+    transform: scale(1.2);
+}
+
+/* Foreground content */
+.np-content {
+    position: relative;
+    z-index: 10;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-align: center;
+}
+
+/* Album art */
+.np-art {
+    width: 320px;
+    height: 320px;
+    border-radius: 12px;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.np-art-loaded {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Track info */
+.np-track-info h1 {
+    margin-top: 20px;
+    font-size: 2.2rem;
+}
+
+.np-track-info h3 {
+    margin-top: 8px;
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
+
+/* Progress bar */
+.np-progress {
+    width: 60%;
+    margin-top: 30px;
+}
+
+.np-progress-bar-bg {
+    background: rgba(255,255,255,0.2);
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.np-progress-bar-fill {
+    background: #1db954;
+    height: 6px;
+    width: 0;
+    transition: width 0.3s linear;
+}
+
+.np-progress-times {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+/* Controls */
+.np-controls {
+    margin-top: 30px;
+    display: flex;
+    gap: 20px;
+}
+
+.np-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+    .np-btn:hover {
+        background: rgba(255,255,255,0.25);
+    }
+
+/* Links */
+.np-links {
+    margin-top: 25px;
+    display: flex;
+    gap: 20px;
+}
+
+.np-link {
+    cursor: pointer;
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
+.np-link:hover {
+    opacity: 1;
+}
+
+
+.lyrics-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 45%;
+    padding: 20px;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(12px);
+    overflow-y: auto; /* ⭐ REQUIRED */
+    overscroll-behavior: contain; /* ⭐ REQUIRED */
+    -webkit-overflow-scrolling: touch;
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    z-index: 50; /* ⭐ REQUIRED */
+}
+
+.lyrics-loaded {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.lyrics-line {
+    color: #bbb;
+    font-size: 1rem;
+    padding: 4px 0;
+    transition: color 0.3s ease, transform 0.3s ease;
+}
+
+.active-line {
+    color: #fff;
+    font-weight: bold;
+    transform: scale(1.05);
+}
+
+.lyrics-overlay {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    z-index: 40;
+}
+
+.lyrics-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 1.4rem;
+    cursor: pointer;
+    color: #fff;
+    z-index: 60;
+}
+
+.np-art {
+    cursor: pointer;
+}
+
+.loginheader {
+    background: rgba(0, 0, 0, 0.25); /* subtle, low attention */
+    backdrop-filter: blur(4px); /* optional: modern, soft */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    height: 40px;
+}
+
+
+    .header-left,
+    .header-right {
+        display: flex;
+        align-items: center;
+    }
+
+    .header-text {
+        font-size: 0.8rem; /* smaller text */
+        line-height: 1; /* tighter vertical spacing */
+    }
+
+    .home-btn {
+        border: 1px solid var(--accent);
+        background: rgba(0,0,0,0.4);
+        color: white;
+        padding: 2px 6px; /* smaller button */
+        border-radius: 4px;
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+
+    .search-bar {
+        background: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: white;
+    }
+
+
+
+    .search-box {
+        width: 100%;
+        padding: 8px 12px;
+        /* NEW: subtle, low-attention background */
+        background: rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(4px);
+        /* NEW: thinner, softer border */
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        /* Text styling */
+        color: white;
+        font-size: 1rem;
+        /* Make it feel lighter */
+        outline: none;
+    }
+
+    .search-box::placeholder {
+        color: rgba(255, 255, 255, 0.45);
+    }

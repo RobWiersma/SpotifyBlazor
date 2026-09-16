@@ -1,0 +1,394 @@
+﻿@using SpotifyBlazor.Shared.Models
+@using SpotifyBlazor.Client.Services
+@page "/nowplaying"
+@inject SpotifyAuthService Auth
+@inject NavigationManager Nav
+@inject TelemetryService Telemetry
+@inject IJSRuntime JS
+
+<AnimatedPage>
+    @if (_nowPlaying == null)
+    {
+        <div class="np-loading">Loading…</div>
+    }
+    else
+    {
+        <div class="np-container">
+
+            <!-- Background -->
+            <div class="np-bg" style="background-image:url('@AlbumImage');"></div>
+
+            <!-- Foreground -->
+            <div class="np-content">
+
+                <!-- Art -->
+                <img src="@AlbumImage"
+                     class="np-art @(_artLoaded ? "np-art-loaded" : "")" />
+
+                <!-- Track info -->
+                <div class="np-track-info">
+                    <h1>@_nowPlaying.Item.Name</h1>
+                    <h3>@string.Join(", ", _nowPlaying.Item.Artists.Select(a => a.Name))</h3>
+                </div>
+
+                <!-- Progress -->
+                <div class="np-progress">
+                    <div class="np-progress-bar-bg">
+                        <div class="np-progress-bar-fill" style="width:@ProgressPercent%"></div>
+                    </div>
+
+                    <div class="np-progress-times">
+                        <span>@FormatTime(_nowPlaying.ProgressMs)</span>
+                        <span>@FormatTime(_nowPlaying.Item.DurationMs)</span>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="np-controls">
+                    <button class="np-btn" @onclick="PrevTrack">⏮</button>
+                    <button class="np-btn" @onclick="TogglePlayPause">
+                        @(_nowPlaying.IsPlaying ? "⏸" : "▶️")
+                    </button>
+                    <button class="np-btn" @onclick="NextTrack">⏭</button>
+                </div>
+
+                <!-- Lyrics toggle -->
+                <div class="np-lyrics-toggle">
+                    <button class="np-btn" @onclick="ToggleLyrics">🎤 Lyrics</button>
+                </div>
+
+                <!-- Navigation -->
+                <div class="np-links">
+                    <span class="np-link" @onclick="GoToAlbum">View Album</span>
+                    <span class="np-link" @onclick="GoToArtist">View Artist</span>
+                </div>
+
+            </div>
+
+            <!-- Lyrics panel -->
+            @if (_showLyrics)
+            {
+                <div class="lyrics-overlay" @onclick="HideLyrics"></div>
+
+                <div class="lyrics-panel @(_lyricsReady ? "lyrics-loaded" : "")"
+                     @ref="_lyricsPanelRef"
+                     @onclick:stopPropagation>
+
+                    <div class="lyrics-close" @onclick="HideLyrics">✕</div>
+
+                    @if (_timedLyrics.Count > 0)
+                    {
+                        @foreach (var line in _timedLyrics.Select((l, i) => new { l, i }))
+                        {
+                            <div class="lyrics-line @(line.i == _currentLineIndex ? "active-line" : "")">
+                                @line.l.Text
+                            </div>
+                        }
+                    }
+                    else if (_rawLyrics != null)
+                    {
+                        <pre class="lyrics-text">@_rawLyrics</pre>
+                    }
+                    else
+                    {
+                        <div class="lyrics-loading">Loading lyrics…</div>
+                    }
+                </div>
+            }
+
+        </div>
+    }
+</AnimatedPage>
+
+@code {
+    private SpotifyNowPlaying? _nowPlaying;
+    private bool _artLoaded;
+
+    // lyrics state
+    private bool _showLyrics;
+    private bool _lyricsReady;
+    private string? _rawLyrics;
+    private readonly List<TimedLine> _timedLyrics = new();
+    private int _currentLineIndex = -1;
+    private ElementReference _lyricsPanelRef;
+    private IJSObjectReference? _lyricsModule;
+
+    private int _apiCounter;
+
+    private string AlbumImage =>
+        _nowPlaying?.Item?.Album?.Images?.FirstOrDefault()?.Url ?? "";
+
+    private double ProgressPercent =>
+        _nowPlaying?.Item == null
+            ? 0
+            : (double)_nowPlaying.ProgressMs / _nowPlaying.Item.DurationMs * 100;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.State == LoginState.LoggedIn)
+            await ReloadNowPlaying();
+
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await ReloadNowPlaying();
+                StateHasChanged();
+            }
+        };
+
+        Auth.OnPlaybackChanged += async () =>
+        {
+            await ReloadNowPlaying();
+
+            if (_showLyrics)
+                await LoadLyricsAsync();
+
+            StateHasChanged();
+        };
+
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Now Playing opened: {_nowPlaying?.Item?.Name}",
+            context: $"Artist: {string.Join(", ", _nowPlaying?.Item?.Artists?.Select(a => a.Name) ?? new List<string>())}",
+            page: "NowPlayingPage",
+            component: "NowPlaying",
+            action: "PageLoaded"
+        );
+    }
+
+    private void HideLyrics()
+    {
+        _showLyrics = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _lyricsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/lyrics.js");
+            _ = RefreshLoop();
+        }
+    }
+
+    private async Task RefreshLoop()
+    {
+        while (true)
+        {
+            await Task.Delay(1000);
+
+            if (_nowPlaying?.IsPlaying == true)
+            {
+                _nowPlaying.ProgressMs += 1000;
+
+                if (_nowPlaying.ProgressMs > _nowPlaying.Item.DurationMs)
+                    _nowPlaying.ProgressMs = _nowPlaying.Item.DurationMs;
+            }
+
+            _apiCounter++;
+            if (_apiCounter >= 10)
+            {
+                _apiCounter = 0;
+                await ReloadNowPlaying();
+
+                if (_showLyrics)
+                    await LoadLyricsAsync();
+            }
+
+            if (_timedLyrics.Count > 0 && _nowPlaying != null)
+            {
+                var currentTime = TimeSpan.FromMilliseconds(_nowPlaying.ProgressMs);
+
+                for (int i = 0; i < _timedLyrics.Count; i++)
+                {
+                    if (currentTime >= _timedLyrics[i].Time)
+                        _currentLineIndex = i;
+                }
+
+                await ScrollLyricsToCurrentAsync();
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task ScrollLyricsToCurrentAsync()
+    {
+        if (_currentLineIndex < 0 || _currentLineIndex >= _timedLyrics.Count)
+            return;
+
+        if (_lyricsModule != null)
+        {
+            await _lyricsModule.InvokeVoidAsync(
+                "scrollLyricsToLine",
+                _lyricsPanelRef,
+                _currentLineIndex
+            );
+        }
+    }
+
+    private async Task ReloadNowPlaying()
+    {
+        _nowPlaying = await Auth.GetNowPlayingAsync();
+        _artLoaded = true;
+    }
+
+    private async Task PrevTrack()
+    {
+        await Auth.SkipToPreviousAsync();
+        await ReloadNowPlaying();
+    }
+
+    private async Task NextTrack()
+    {
+        await Auth.SkipToNextAsync();
+        await Task.Delay(300);
+        await ReloadNowPlaying();
+    }
+
+    private async Task TogglePlayPause()
+    {
+        if (_nowPlaying?.IsPlaying == true)
+            await Auth.PauseAsync();
+        else
+            await Auth.PlayAsync();
+
+        await ReloadNowPlaying();
+    }
+
+    private void GoToAlbum()
+    {
+        var id = _nowPlaying?.Item?.Album?.Id;
+        if (id != null)
+            Nav.NavigateTo($"/album/{id}");
+    }
+
+    private void GoToArtist()
+    {
+        var id = _nowPlaying?.Item?.Artists?.FirstOrDefault()?.Id;
+        if (id != null)
+            Nav.NavigateTo($"/artist/{id}");
+    }
+
+    private async Task ToggleLyrics()
+    {
+        _showLyrics = !_showLyrics;
+
+        if (_showLyrics)
+            await LoadLyricsAsync();
+    }
+
+    private async Task LoadLyricsAsync()
+    {
+        _lyricsReady = false;
+        _rawLyrics = null;
+        _timedLyrics.Clear();
+        _currentLineIndex = -1;
+
+        var title = _nowPlaying?.Item?.Name;
+        var artist = _nowPlaying?.Item?.Artists?.FirstOrDefault()?.Name;
+
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist))
+        {
+            _lyricsReady = true;
+            return;
+        }
+
+        try
+        {
+            var url = $"https://api.lyrics.ovh/v1/{artist}/{title}";
+            var response = await new HttpClient().GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _rawLyrics = "Lyrics not available.";
+                _lyricsReady = true;
+                return;
+            }
+
+            var json = await response.Content.ReadFromJsonAsync<LyricsResponse>();
+            var raw = json?.Lyrics;
+
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                _rawLyrics = "Lyrics not found.";
+                _lyricsReady = true;
+                return;
+            }
+
+            var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var line in lines)
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    line,
+        @"
+
+\[(\d{2}):(\d{2}\.\d{2})\]
+
+(.*)"
+                );
+
+                if (match.Success)
+                {
+                    var minutes = int.Parse(match.Groups[1].Value);
+                    var seconds = double.Parse(match.Groups[2].Value);
+                    var text = match.Groups[3].Value.Trim();
+
+                    _timedLyrics.Add(new TimedLine
+                    {
+                        Time = TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds),
+                        Text = text
+                    });
+                }
+            }
+
+            // ⭐ If no timestamps exist, generate synthetic ones
+            if (_timedLyrics.Count == 0)
+            {
+                const double secondsPerLine = 3.0; // tune this
+                double current = 0;
+
+                foreach (var line in lines)
+                {
+                    _timedLyrics.Add(new TimedLine
+                    {
+                        Time = TimeSpan.FromSeconds(current),
+                        Text = line.Trim()
+                    });
+
+                    current += secondsPerLine;
+                }
+            }
+
+            if (_timedLyrics.Count == 0)
+            {
+                _rawLyrics = raw; // fallback to static lyrics
+            }
+        }
+        catch
+        {
+            _rawLyrics = "Unable to load lyrics.";
+        }
+
+        _lyricsReady = true;
+        StateHasChanged();
+    }
+
+    private class LyricsResponse
+    {
+        public string Lyrics { get; set; } = "";
+    }
+
+    private class TimedLine
+    {
+        public TimeSpan Time { get; set; }
+        public string Text { get; set; } = "";
+    }
+
+    private string FormatTime(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+}

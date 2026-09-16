@@ -4,6 +4,7 @@
 @inject TelemetryService Telemetry
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div id="playerbar" class="playerbar d-flex align-items-center gap-3 px-3 py-2">
 
@@ -17,14 +18,14 @@
                     : "Not logged in")
         </span>
     }
-    else if (nowPlaying?.Item != null)
+    else if (current?.Item != null)
     {
-        <img src="@nowPlaying.Item.Album.Images.FirstOrDefault()?.Url"
-             class="playerbar-art" />
+        <img src="@current.Item.Album.Images.FirstOrDefault()?.Url"
+             class="playerbar-art" @onclick="GoToNowPlaying" />
 
         <div class="track-info">
-            <strong class="track-title">@nowPlaying.Item.Name</strong>
-            <span class="track-artist">@string.Join(", ", nowPlaying.Item.Artists.Select(a => a.Name))</span>
+            <strong class="track-title">@current.Item.Name</strong>
+            <span class="track-artist">@string.Join(", ", current.Item.Artists.Select(a => a.Name))</span>
         </div>
 
         <div class="player-controls-wrapper d-flex flex-column align-items-center">
@@ -32,7 +33,7 @@
             <div class="player-controls d-flex align-items-center gap-3">
                 <button class="btn btn-sm btn-dark" @onclick="PrevTrack">⏮</button>
                 <button class="btn btn-sm btn-dark" @onclick="TogglePlayPause">
-                    @(nowPlaying?.IsPlaying == true ? "⏸" : "▶️")
+                    @(current?.IsPlaying == true ? "⏸" : "▶️")
                 </button>
                 <button class="btn btn-sm btn-dark" @onclick="NextTrack">⏭</button>
             </div>
@@ -43,13 +44,12 @@
                 </div>
 
                 <div class="d-flex justify-content-between text-light small mt-1">
-                    <span>@FormatTime(nowPlaying.ProgressMs)</span>
-                    <span>@FormatTime(nowPlaying.Item.DurationMs)</span>
+                    <span>@FormatTime(current.ProgressMs)</span>
+                    <span>@FormatTime(current.Item.DurationMs)</span>
                 </div>
             </div>
         </div>
 
-        <!-- ⭐ MOBILE TOOLS TOGGLE -->
         <button class="mobile-tools-toggle btn btn-dark d-md-none" @onclick="ToggleMobileTools">
             ⚙️ Options
         </button>
@@ -62,7 +62,6 @@
             </div>
         }
 
-        <!-- ⭐ DESKTOP FLOATING CONTROLS -->
         <div class="desktop-tools d-none d-md-block">
             <VolumePopup @ref="VolumePopup" />
         </div>
@@ -79,40 +78,26 @@
 </div>
 
 @code {
-    private IJSObjectReference? _module;
+    private IJSObjectReference? jsModule;
+    private VolumePopup VolumePopup;
+
+    private SpotifyNowPlaying? current;
+    private bool refreshLoopStarted = false;
+    private int apiRefreshCounter = 0;
+
+    private ElementReference progressBarRef;
+    private bool showMobileTools = false;
+
+    private void ToggleMobileTools() => showMobileTools = !showMobileTools;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (nowPlaying != null) // ensure DOM exists
+        if (current != null)
         {
-            if (_module == null)
-            {
-                _module = await JS.InvokeAsync<IJSObjectReference>("import", "/playerbar.js");
-            }
+            if (jsModule == null)
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/playerbar.js");
 
-            await _module.InvokeVoidAsync("updateHeight");
-        }
-    }
-
-    private VolumePopup VolumePopup;
-
-    private SpotifyNowPlaying? nowPlaying;
-    private bool refreshLoopStarted = false;
-
-    private ElementReference progressBarRef;
-
-    private bool showMobileTools = false;
-
-    private void ToggleMobileTools()
-    {
-        showMobileTools = !showMobileTools;
-    }
-
-    private async Task HandleDeviceChanged()
-    {
-        if (VolumePopup != null)
-        {
-            await VolumePopup.RefreshVolumeState();
+            await jsModule.InvokeVoidAsync("updateHeight");
         }
     }
 
@@ -123,18 +108,12 @@
             if (state == LoginState.LoggedIn)
             {
                 await LoadNowPlaying();
-
-                if (!refreshLoopStarted)
-                {
-                    refreshLoopStarted = true;
-                    _ = RefreshLoop();
-                }
-
+                StartRefreshLoop();
                 StateHasChanged();
             }
             else
             {
-                nowPlaying = null;
+                current = null;
                 StateHasChanged();
             }
         };
@@ -143,6 +122,7 @@
         {
             if (Auth.State == LoginState.LoggedIn)
             {
+                apiRefreshCounter = 0;
                 await LoadNowPlaying();
                 StateHasChanged();
             }
@@ -151,24 +131,26 @@
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadNowPlaying();
+            StartRefreshLoop();
+        }
+    }
 
-            if (!refreshLoopStarted)
-            {
-                refreshLoopStarted = true;
-                _ = RefreshLoop();
-            }
+    private void StartRefreshLoop()
+    {
+        if (!refreshLoopStarted)
+        {
+            refreshLoopStarted = true;
+            _ = RefreshLoop();
         }
     }
 
     private double ProgressPercent =>
-        nowPlaying?.Item == null
+        current?.Item == null
             ? 0
-            : (double)nowPlaying.ProgressMs / nowPlaying.Item.DurationMs * 100;
+            : (double)current.ProgressMs / current.Item.DurationMs * 100;
 
     private async Task RefreshLoop()
     {
-        int apiRefreshCounter = 0;
-
         while (true)
         {
             await Task.Delay(1000);
@@ -183,10 +165,6 @@
                 apiRefreshCounter = 0;
                 await LoadNowPlaying();
             }
-            else if (nowPlaying?.IsPlaying == true)
-            {
-                nowPlaying.ProgressMs += 1000;
-            }
 
             StateHasChanged();
         }
@@ -197,7 +175,7 @@
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        nowPlaying = await Auth.GetNowPlayingAsync();
+        current = await Auth.GetNowPlayingAsync();
     }
 
     private string FormatTime(int ms)
@@ -211,20 +189,8 @@
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        await Telemetry.TrackTimedAsync(
-            "Info",
-            "PlayerBar.PrevTrack",
-            async () =>
-            {
-                await Auth.SkipToPreviousAsync();
-                await LoadNowPlaying();
-            },
-            context: "User pressed previous track",
-            page: NavigationManager.Uri,
-            component: nameof(PlayerBar),
-            actionName: "PrevTrack"
-        );
-
+        await Auth.SkipToPreviousAsync();
+        await LoadNowPlaying();
         StateHasChanged();
     }
 
@@ -233,30 +199,17 @@
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        await Telemetry.TrackTimedAsync(
-            "Info",
-            "PlayerBar.NextTrack",
-            async () =>
-            {
-                await Auth.SkipToNextAsync();
+        await Auth.SkipToNextAsync();
+        await Task.Delay(300);
 
-                await Task.Delay(300);
+        for (int i = 0; i < 5; i++)
+        {
+            await LoadNowPlaying();
+            if (current?.IsPlaying == true)
+                break;
 
-                for (int i = 0; i < 5; i++)
-                {
-                    await LoadNowPlaying();
-
-                    if (nowPlaying?.IsPlaying == true)
-                        break;
-
-                    await Task.Delay(200);
-                }
-            },
-            context: "User pressed next track",
-            page: NavigationManager.Uri,
-            component: nameof(PlayerBar),
-            actionName: "NextTrack"
-        );
+            await Task.Delay(200);
+        }
 
         StateHasChanged();
     }
@@ -266,46 +219,43 @@
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        var isPlaying = nowPlaying?.IsPlaying == true;
+        bool playing = current?.IsPlaying == true;
 
-        await Telemetry.TrackTimedAsync(
-            "Info",
-            isPlaying ? "PlayerBar.Pause" : "PlayerBar.Play",
-            async () =>
-            {
-                if (isPlaying)
-                    await Auth.PauseAsync();
-                else
-                    await Auth.PlayAsync();
+        if (playing)
+            await Auth.PauseAsync();
+        else
+            await Auth.PlayAsync();
 
-                await LoadNowPlaying();
-            },
-            context: isPlaying ? "User paused playback" : "User started playback",
-            page: NavigationManager.Uri,
-            component: nameof(PlayerBar),
-            actionName: isPlaying ? "Pause" : "Play"
-        );
-
+        await LoadNowPlaying();
         StateHasChanged();
     }
 
     private async Task Seek(MouseEventArgs e)
     {
-        if (Auth.State != LoginState.LoggedIn || nowPlaying?.Item == null)
+        if (Auth.State != LoginState.LoggedIn || current?.Item == null)
             return;
 
-        //var width = await JS.InvokeAsync<double>("getWidth", progressBarRef);
-        var width = await _module.InvokeAsync<double>("getWidth", progressBarRef);
-
+        var width = await jsModule.InvokeAsync<double>("getWidth", progressBarRef);
         if (width <= 0)
             return;
 
         var percent = e.OffsetX / width;
-        var newMs = (int)(nowPlaying.Item.DurationMs * percent);
+        var newMs = (int)(current.Item.DurationMs * percent);
 
         await Auth.SeekAsync(newMs);
 
-        nowPlaying.ProgressMs = newMs;
+        current.ProgressMs = newMs;
         StateHasChanged();
+    }
+
+    private async Task HandleDeviceChanged()
+    {
+        if (VolumePopup != null)
+            await VolumePopup.RefreshVolumeState();
+    }
+
+    private void GoToNowPlaying()
+    {
+        Nav.NavigateTo("/nowplaying");
     }
 }

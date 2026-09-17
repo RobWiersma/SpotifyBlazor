@@ -175,13 +175,15 @@
             action: "TrackPlayed"
         );
 
-        // Determine track index inside its album
-        int index = track.TrackNumber > 0
-            ? track.TrackNumber - 1
-            : 0;
+        // Find track index inside liked songs
+        int index = LikedSongs.Items.FindIndex(i => i.Track.Id == track.Id);
+        if (index < 0) index = 0;
 
-        // ⭐ Play inside album context (enables next/previous)
-        await Auth.PlayTrackInContextAsync(track.Album.Uri, index);
+        // ⭐ Play inside Liked Songs playlist context
+        await Auth.PlayTrackInContextAsync(
+            "spotify:collection:tracks",
+            index
+        );
     }
 
     private async Task OnAlbumClicked(SpotifyTrack track)

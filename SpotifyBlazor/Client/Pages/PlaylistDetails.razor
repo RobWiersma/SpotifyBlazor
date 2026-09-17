@@ -42,7 +42,7 @@
                         <div class="track-info">
                             <div class="track-name"
                                  style="cursor:pointer"
-                                 @onclick="@(() => PlayTrack(t.Track))">
+                                 @onclick="@(() => PlayTrack(t))">
                                 @t.Track?.Name
                             </div>
 
@@ -80,7 +80,6 @@
     public SpotifyPlaylist Playlist { get; set; }
     public List<PlaylistTrackItem> Tracks { get; set; } = new();
 
-    // ⭐ Animation state
     private HashSet<string> _animatedTracks = new();
     private bool HeaderLoaded = false;
 
@@ -89,16 +88,13 @@
         Playlist = await Auth.GetPlaylistAsync(PlaylistId);
         Tracks = await Auth.GetPlaylistTracksAsync(PlaylistId);
 
-        // Mark header as animated
         HeaderLoaded = true;
 
-        // Mark tracks for animation
         _animatedTracks = Tracks
             .Select(t => t.Track?.Id)
             .Where(id => id != null)
             .ToHashSet();
 
-        // 🔥 TELEMETRY: Playlist loaded
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Playlist loaded: {Playlist?.Name}",
@@ -109,18 +105,27 @@
         );
     }
 
-    private async Task PlayTrack(PlaylistTrack track)
+    private async Task PlayTrack(PlaylistTrackItem item)
     {
+        var track = item.Track;
+        if (track == null)
+            return;
+
+        // Determine index inside playlist
+        int index = Tracks.FindIndex(t => t.Track?.Id == track.Id);
+        if (index < 0) index = 0;
+
+        // Play inside playlist context
+        await Auth.PlayTrackInContextAsync(Playlist.Uri, index);
+
         await Telemetry.TrackAsync(
             level: "Info",
-            message: $"Track played: {track?.Name}",
-            context: $"Album: {track?.Album?.Name}, Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
+            message: $"Track played: {track.Name}",
+            context: $"Playlist: {Playlist?.Name}, Artist: {string.Join(", ", track.Artists.Select(a => a.Name))}",
             page: "PlaylistDetailsPage",
             component: "TrackList",
             action: "TrackPlayed"
         );
-
-        await Auth.PlayTrackAsync(track.Uri);
     }
 
     private async Task OnAlbumClicked(PlaylistTrack track)

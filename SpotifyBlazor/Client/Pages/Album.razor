@@ -6,46 +6,46 @@
 @inject TelemetryService Telemetry
 
 <AnimatedPage>
-@if (Auth.State != LoginState.LoggedIn)
-{
-    <p class="text-warning">You must be logged in to view this album.</p>
-}
-else if (album == null)
-{
-    <p>Loading...</p>
-}
-else
-{
-    <div class="d-flex gap-4">
+    @if (Auth.State != LoginState.LoggedIn)
+    {
+        <p class="text-warning">You must be logged in to view this album.</p>
+    }
+    else if (album == null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="d-flex gap-4">
 
-        <img src="@album.Images.FirstOrDefault()?.Url"
-             style="width:200px; border-radius:8px;" />
+            <img src="@album.Images.FirstOrDefault()?.Url"
+                 style="width:200px; border-radius:8px;" />
 
-        <div>
-            <h3>@album.Name</h3>
-            <p>@string.Join(", ", album.Artists.Select(a => a.Name))</p>
-            <p>Released: @album.ReleaseDate</p>
-        </div>
-    </div>
-
-    <h4 class="mt-4">Tracks</h4>
-
-    <ul class="list-group">
-        @foreach (var trackObj in album.Tracks.Items)
-        {
-            <div class="track-row" @onclick="() => Play(trackObj)">
-                <img src="@album.Images.First().Url" class="track-art" />
-
-                <div class="track-info">
-                    <div class="track-title">@trackObj.Name</div>
-                    <div class="track-artist">@string.Join(", ", trackObj.Artists.Select(a => a.Name))</div>
-                </div>
-
-                <div class="track-duration">@FormatTime(trackObj.DurationMs)</div>
+            <div>
+                <h3>@album.Name</h3>
+                <p>@string.Join(", ", album.Artists.Select(a => a.Name))</p>
+                <p>Released: @album.ReleaseDate</p>
             </div>
-        }
-    </ul>
-}
+        </div>
+
+        <h4 class="mt-4">Tracks</h4>
+
+        <ul class="list-group">
+            @foreach (var trackObj in album.Tracks.Items)
+            {
+                <div class="track-row" @onclick="() => Play(trackObj)">
+                    <img src="@album.Images.First().Url" class="track-art" />
+
+                    <div class="track-info">
+                        <div class="track-title">@trackObj.Name</div>
+                        <div class="track-artist">@string.Join(", ", trackObj.Artists.Select(a => a.Name))</div>
+                    </div>
+
+                    <div class="track-duration">@FormatTime(trackObj.DurationMs)</div>
+                </div>
+            }
+        </ul>
+    }
 </AnimatedPage>
 
 @code {
@@ -55,7 +55,6 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // React to login state changes
         Auth.LoginStateChanged += async state =>
         {
             if (state == LoginState.LoggedIn)
@@ -65,7 +64,6 @@ else
             }
         };
 
-        // If already logged in (page reload)
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadAlbum();
@@ -95,7 +93,12 @@ else
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        await Auth.PlayTrackAsync(track.Uri);
+        // Determine track index inside album
+        int index = album.Tracks.Items.FindIndex(t => t.Id == track.Id);
+        if (index < 0) index = track.TrackNumber - 1; // fallback
+
+        // Play inside album context
+        await Auth.PlayTrackInContextAsync(album.Uri, index);
 
         await Telemetry.TrackAsync(
             level: "Info",

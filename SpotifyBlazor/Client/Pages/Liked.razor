@@ -175,7 +175,13 @@
             action: "TrackPlayed"
         );
 
-        await Auth.PlayTrackAsync(track.Uri);
+        // Determine track index inside its album
+        int index = track.TrackNumber > 0
+            ? track.TrackNumber - 1
+            : 0;
+
+        // ⭐ Play inside album context (enables next/previous)
+        await Auth.PlayTrackInContextAsync(track.Album.Uri, index);
     }
 
     private async Task OnAlbumClicked(SpotifyTrack track)

@@ -187,11 +187,15 @@
         MarkPageForAnimation();
     }
 
-    // ⭐ Track Actions
     private async Task PlayTrack(SpotifyTrack track)
     {
         if (Auth.State != LoginState.LoggedIn)
             return;
+
+        // Determine track index inside its album
+        int index = track.TrackNumber > 0
+            ? track.TrackNumber - 1
+            : 0;
 
         await Telemetry.TrackAsync(
             "Info",
@@ -202,7 +206,8 @@
             action: "TrackPlayed"
         );
 
-        await Auth.PlayTrackAsync(track.Uri);
+        // ⭐ Play inside album context (enables next/previous)
+        await Auth.PlayTrackInContextAsync(track.Album.Uri, index);
     }
 
     private async Task OnAlbumClicked(SpotifyTrack track)

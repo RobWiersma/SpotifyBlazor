@@ -145,6 +145,17 @@ else if (Results?.Any() == true)
             action: "TrackPlayed"
         );
 
-        await Auth.PlayTrackAsync(id);
+        // Fetch full track details so we can get album + track number
+        var track = await Auth.GetTrackAsync(id);
+        if (track == null)
+            return;
+
+        // Determine track index inside its album
+        int index = track.TrackNumber > 0
+            ? track.TrackNumber - 1
+            : 0;
+
+        // ⭐ Play inside album context (enables next/previous)
+        await Auth.PlayTrackInContextAsync(track.Album.Uri, index);
     }
 }

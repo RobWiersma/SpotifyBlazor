@@ -568,16 +568,21 @@ public class SpotifyAuthService
         _logger.LogInformation("PlayAsync: Response {StatusCode}", res.StatusCode);
     }
 
-    public async Task PlayTrackAsync(string trackUri)
+    public async Task PlayTrackInContextAsync(string contextUri, int trackIndex)
     {
-        _logger.LogInformation("PlayTrackAsync: Playing track {TrackUri}", trackUri);
+        _logger.LogInformation("PlayTrackInContextAsync: Playing from context {ContextUri} at index {TrackIndex}",
+            contextUri, trackIndex);
 
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/play")
         {
-            Content = JsonContent.Create(new { uris = new[] { trackUri } })
+            Content = JsonContent.Create(new
+            {
+                context_uri = contextUri,          // album or playlist URI
+                offset = new { position = trackIndex } // 0‑based index
+            })
         };
 
         if (!string.IsNullOrEmpty(AccessToken))
@@ -585,7 +590,7 @@ public class SpotifyAuthService
 
         var res = await _http.SendAsync(req);
 
-        _logger.LogInformation("PlayTrackAsync: Response {StatusCode}", res.StatusCode);
+        _logger.LogInformation("PlayTrackInContextAsync: Response {StatusCode}", res.StatusCode);
 
         NotifyPlaybackChanged();
     }
@@ -1194,4 +1199,35 @@ public class SpotifyAuthService
         return await res.Content.ReadFromJsonAsync<SpotifyPlayHistory>();
     }
 
-}
+    public async Task<SpotifyTrack?> GetTrackAsync(string trackId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://api.spotify.com/v1/tracks/{trackId}"
+        );
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("GetTrackAsync: Failed to fetch track {TrackId}. Status: {StatusCode}",
+                trackId, res.StatusCode);
+            return null;
+        }
+
+        var track = await res.Content.ReadFromJsonAsync<SpotifyTrack>();
+
+        _logger.LogInformation("GetTrackAsync: Loaded track {TrackName}", track?.Name);
+
+        return track;
+    }
+
+    }

@@ -191,20 +191,6 @@
         }
     }
 
-    private async Task Play(string uri)
-    {
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Track played from artist page",
-            context: $"Artist: {artist?.Name}",
-            page: "ArtistPage",
-            component: "TrackPlay",
-            action: "TrackPlayed"
-        );
-
-        await Auth.PlayTrackAsync(uri);
-    }
-
     private string FormatTime(int ms)
     {
         var ts = TimeSpan.FromMilliseconds(ms);

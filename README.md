@@ -53,7 +53,8 @@ SpotifyBlazor/
 └── Shared/      # Models
 ```
 
-Running Locally
+
+## Running Locally
 
 Create a Spotify Developer App
 

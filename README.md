@@ -1,70 +1,53 @@
-https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
+# SpotifyBlazor
 
-SpotifyBlazor
+![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)
+![Blazor](https://img.shields.io/badge/Blazor-WebApp-512BD4)
+![C#](https://img.shields.io/badge/C%23-Developer-blue)
+![Spotify Web API](https://img.shields.io/badge/Spotify-Web%20API-1DB954)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-success)
+![Platform](https://img.shields.io/badge/Platform-Web-lightgrey)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
+![App Insights](https://img.shields.io/badge/Application%20Insights-Enabled-purple)
+![Auth](https://img.shields.io/badge/Auth-JWT%20%2B%20OAuth-orange)
 
-A Blazor Web App that integrates with the Spotify Web API to deliver a full music and podcast experience — including playback, liked content, albums, artists, shows, and real‑time telemetry.
+A modern Blazor Web App that integrates with the Spotify Web API to deliver a full music + podcast experience—playback, liked content, albums, artists, shows, search, and real‑time telemetry.
 
-Features
-```
-    Spotify OAuth login + automatic token refresh
+---
 
-    Now Playing with playback controls
+## Overview
 
-    Liked Songs, Saved Albums, Saved Podcasts
+SpotifyBlazor is a full‑stack .NET application that brings Spotify’s ecosystem into a clean, responsive Blazor interface. It supports OAuth login, playback control, browsing liked songs/albums/shows, album & artist pages, podcast show pages, and Application Insights telemetry.
 
-    Album, Artist, and Podcast Show pages
+---
 
-    Search across tracks, artists, and albums
+## Features
 
-    Application Insights telemetry
+- Spotify OAuth login + automatic token refresh  
+- Now Playing with playback controls  
+- Liked Songs, Saved Albums, Saved Podcasts  
+- Album, Artist, and Podcast Show pages  
+- Search across tracks, artists, albums  
+- Application Insights telemetry  
+- Clean Blazor components + modern UI  
 
-    Clean Blazor components + modern UI
-```
-Tech Stack
-```
-    Blazor Web App (SSR + WASM)
+---
 
-    ASP.NET Core backend
+## Tech Stack
 
-    Spotify Web API
+- Blazor Web App (SSR + WASM)  
+- ASP.NET Core backend  
+- Spotify Web API  
+- JWT authentication  
+- Application Insights  
+- C# / .NET 8  
 
-    JWT authentication
+---
 
-    Application Insights
+## Project Structure
 
-    C# / .NET 8
-```
-Project Structure
-Code
-```
+```txt
 SpotifyBlazor/
 ├── Client/      # Blazor UI
 ├── Server/      # API, auth, telemetry
 └── Shared/      # Models
-```
-Running Locally
-```
-    Create a Spotify Developer App
-
-    Add your Client ID + Redirect URI
-
-    Configure JWT + AI settings
-
-    Run backend:
-    Code
-
-    dotnet run --project SpotifyBlazor
-
-    Run client:
-    Code
-
-    dotnet run --project SpotifyBlazor.Client
-
-    Visit:
-    Code
-
-    https://localhost:7151
-```
-Why This Project Exists
-
-To explore a modern Blazor architecture, real‑world OAuth flows, and a polished media UI — all while integrating a complex external API.

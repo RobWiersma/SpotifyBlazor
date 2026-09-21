@@ -1,3 +1,5 @@
+https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
+
 # SpotifyBlazor
 
 ![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)

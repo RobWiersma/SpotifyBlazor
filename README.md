@@ -46,8 +46,21 @@ SpotifyBlazor is a full‑stack .NET application that brings Spotify’s ecosyst
 
 ## Project Structure
 
-```txt
+```
 SpotifyBlazor/
 ├── Client/      # Blazor UI
 ├── Server/      # API, auth, telemetry
 └── Shared/      # Models
+```
+
+Running Locally
+
+Create a Spotify Developer App
+
+Add your Client ID + Redirect URI
+
+Configure JWT + AI settings
+
+Run backend: dotnet run --project SpotifyBlazor
+
+Visit: https://localhost:7151

@@ -1,0 +1,91 @@
+﻿@page "/show/{ShowId}"
+@using SpotifyBlazor.Shared.Models
+@using SpotifyBlazor.Client.Services
+@inject SpotifyAuthService Auth
+@inject NavigationManager Nav
+@inject TelemetryService Telemetry
+
+<AnimatedPage>
+    @if (_show == null)
+    {
+        <p>Loading podcast…</p>
+    }
+    else
+    {
+        <div class="show-header d-flex align-items-center mb-4">
+            <img src="@_show.Images.FirstOrDefault()?.Url"
+                 class="show-cover me-4"
+                 style="width:160px; height:160px; border-radius:8px;" />
+
+            <div>
+                <h2>@_show.Name</h2>
+                <p class="text-muted">@_show.Publisher</p>
+                <p>@_show.Description</p>
+            </div>
+        </div>
+
+        <h4>Episodes</h4>
+
+        @if (_episodes == null)
+        {
+            <p>Loading episodes…</p>
+        }
+        else
+        {
+            <ul class="episode-list">
+                @foreach (var ep in _episodes.Items)
+                {
+                    <li class="episode-item mb-3">
+                        <div class="fw-bold">@ep.Name</div>
+                        <div class="text-muted">@ep.ReleaseDate.ToShortDateString()</div>
+                        <div>@ep.Description</div>
+
+                        <button class="btn btn-sm btn-primary mt-2"
+                                @onclick="@(() => PlayEpisode(ep))">
+                            Play Episode
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    }
+</AnimatedPage>
+
+@code {
+    [Parameter] public string ShowId { get; set; } = string.Empty;
+
+    private SpotifyShow? _show;
+    private SpotifyShowEpisodes? _episodes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        _show = await Auth.GetShowAsync(ShowId);
+        _episodes = await Auth.GetShowEpisodesAsync(ShowId);
+
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Show page loaded: {_show?.Name}",
+            context: $"ShowId: {ShowId}",
+            page: "ShowPage",
+            component: "ShowDetail",
+            action: "PageLoaded"
+        );
+    }
+
+    private async Task PlayEpisode(SpotifyEpisode ep)
+    {
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Episode played: {ep.Name}",
+            context: $"Show: {_show?.Name}",
+            page: "ShowPage",
+            component: "EpisodeList",
+            action: "EpisodePlayed"
+        );
+
+        await Auth.PlayEpisodeAsync(ep.Id);
+    }
+}

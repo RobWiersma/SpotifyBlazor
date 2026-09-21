@@ -1230,4 +1230,99 @@ public class SpotifyAuthService
         return track;
     }
 
+    public async Task<SpotifySavedAlbums?> GetSavedAlbumsAsync(int offset = 0, int limit = 50)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/me/albums?limit={limit}&offset={offset}");
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return null;
+
+        return await res.Content.ReadFromJsonAsync<SpotifySavedAlbums>();
     }
+
+    public async Task<SpotifySavedShows?> GetSavedShowsAsync(int offset = 0, int limit = 50)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/me/shows?limit={limit}&offset={offset}");
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return null;
+
+        return await res.Content.ReadFromJsonAsync<SpotifySavedShows>();
+    }
+
+    public async Task<SpotifyShow?> GetShowAsync(string showId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/shows/{showId}");
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode)
+            return null;
+
+        return await res.Content.ReadFromJsonAsync<SpotifyShow>();
+    }
+
+    public async Task<SpotifyShowEpisodes?> GetShowEpisodesAsync(string showId)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.spotify.com/v1/shows/{showId}/episodes?limit=50");
+
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var res = await _http.SendAsync(req);
+        if (!res.IsSuccessStatusCode) return null;
+
+        return await res.Content.ReadFromJsonAsync<SpotifyShowEpisodes>();
+    }
+
+    public async Task PlayEpisodeAsync(string episodeId)
+    {
+        await RefreshIfNeededAsync();
+
+        var body = new
+        {
+            uris = new[] { $"spotify:episode:{episodeId}" }
+        };
+
+        var req = new HttpRequestMessage(HttpMethod.Put,
+            "https://api.spotify.com/v1/me/player/play")
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        await _http.SendAsync(req);
+    }
+
+}

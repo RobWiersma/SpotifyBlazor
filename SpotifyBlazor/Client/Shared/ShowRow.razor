@@ -1,0 +1,25 @@
+﻿@using SpotifyBlazor.Shared.Models
+@inject NavigationManager Nav
+
+<div class="show-row d-flex align-items-center mb-3"
+     style="cursor:pointer"
+     @onclick="NavigateToShow">
+
+    <img src="@Show.Images.FirstOrDefault()?.Url"
+         class="show-cover me-3"
+         style="width:64px; height:64px; border-radius:4px;" />
+
+    <div class="show-info">
+        <div class="show-name fw-bold">@Show.Name</div>
+        <div class="show-publisher">@Show.Publisher</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public SpotifyShow Show { get; set; } = default!;
+
+    private void NavigateToShow()
+    {
+        Nav.NavigateTo($"/show/{Show.Id}");
+    }
+}

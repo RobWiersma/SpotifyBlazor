@@ -1,0 +1,25 @@
+﻿@using SpotifyBlazor.Shared.Models
+@inject NavigationManager Nav
+
+<div class="album-row d-flex align-items-center mb-3"
+     style="cursor:pointer"
+     @onclick="NavigateToAlbum">
+
+    <img src="@Album.Images.FirstOrDefault()?.Url"
+         class="album-cover me-3"
+         style="width:64px; height:64px; border-radius:4px;" />
+
+    <div class="album-info">
+        <div class="album-name fw-bold">@Album.Name</div>
+        <div class="album-artist">@Album.Artists.FirstOrDefault()?.Name</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public SpotifyAlbum Album { get; set; } = default!;
+
+    private void NavigateToAlbum()
+    {
+        Nav.NavigateTo($"/album/{Album.Id}");
+    }
+}

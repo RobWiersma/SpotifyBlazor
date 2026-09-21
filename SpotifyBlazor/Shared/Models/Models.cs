@@ -821,5 +821,95 @@ public class SpotifyContext
         public SpotifyTrack Track { get; set; }
         public DateTime PlayedAt { get; set; }
     }
+
+    
+    public class SpotifySavedAlbums
+    {
+        [JsonPropertyName("items")]
+        public List<SavedAlbumItem> Items { get; set; } = new();
+
+        [JsonPropertyName("total")]
+        public int Total { get; set; }
+
+        [JsonPropertyName("limit")]
+        public int Limit { get; set; }
+
+        [JsonPropertyName("offset")]
+        public int Offset { get; set; }
+    }
+
+    public class SavedAlbumItem
+    {
+        [JsonPropertyName("added_at")]
+        public DateTime AddedAt { get; set; }
+
+        [JsonPropertyName("album")]
+        public SpotifyAlbum Album { get; set; } = default!;
+
+
+    }
+
+    public class SpotifySavedShows
+    {
+        [JsonPropertyName("items")]
+        public List<SavedShowItem> Items { get; set; } = new();
+
+        [JsonPropertyName("total")]
+        public int Total { get; set; }
+
+        [JsonPropertyName("limit")]
+        public int Limit { get; set; }
+
+        [JsonPropertyName("offset")]
+        public int Offset { get; set; }
+    }
+
+    public class SavedShowItem
+    {
+        [JsonPropertyName("added_at")]
+        public DateTime AddedAt { get; set; }
+
+        [JsonPropertyName("show")]
+        public SpotifyShow Show { get; set; } = default!;
+    }
+
+    public class SpotifyShow
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("publisher")]
+        public string Publisher { get; set; } = string.Empty;
+
+        [JsonPropertyName("images")]
+        public List<SpotifyImage> Images { get; set; } = new();
+
+        [JsonPropertyName("media_type")]
+        public string MediaType { get; set; } = string.Empty;
+
+        [JsonPropertyName("description")]
+        public string Description { get; set; } = string.Empty;
+
+        [JsonPropertyName("total_episodes")]
+        public int TotalEpisodes { get; set; }
+    }
+
+    public class SpotifyEpisode
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime ReleaseDate { get; set; }
+        public List<SpotifyImage> Images { get; set; } = new();
+    }
+
+    public class SpotifyShowEpisodes
+    {
+        public List<SpotifyEpisode> Items { get; set; } = new();
+        public int Total { get; set; }
+    }
 }
 

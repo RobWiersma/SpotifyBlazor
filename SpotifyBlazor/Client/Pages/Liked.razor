@@ -6,22 +6,134 @@
 @inject NavigationManager Nav
 
 <AnimatedPage>
-    <h2 class="mb-3">Liked Songs</h2>
 
-    @if (Auth.State != LoginState.LoggedIn)
+    <h2 class="mb-3">Liked</h2>
+
+    <!-- Tabs -->
+    <ul class="nav nav-pills mb-4 liked-tabs">
+        <li class="nav-item">
+            <button class="nav-link @( _activeTab == "songs" ? "active" : "" )"
+                    @onclick=@(() => SwitchTab("songs"))>
+                Songs
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link @( _activeTab == "albums" ? "active" : "" )"
+                    @onclick=@(() => SwitchTab("albums"))>
+                Albums
+            </button>
+        </li>
+
+        <li class="nav-item">
+            <button class="nav-link @( _activeTab == "shows" ? "active" : "" )"
+                    @onclick=@(() => SwitchTab("shows"))>
+                Podcasts
+            </button>
+        </li>
+    </ul>
+
+    <!-- SONGS TAB -->
+    @if (_activeTab == "songs")
     {
-        <p class="text-warning">You must be logged in to view your liked songs.</p>
+        @RenderSongs()
     }
-    else if (LikedSongs == null)
+
+    <!-- ALBUMS TAB -->
+    @if (_activeTab == "albums")
     {
-        <p>Loading your liked songs…</p>
+        @RenderAlbums()
     }
-    else if (LikedSongs.Items.Count == 0)
+
+    <!-- PODCASTS TAB -->
+    @if (_activeTab == "shows")
     {
-        <p>You have no liked songs.</p>
+        @RenderShows()
     }
-    else
+
+</AnimatedPage>
+
+@code {
+    // --- DATA ---
+    private SpotifyLikedSongs? LikedSongs;
+    private SpotifySavedAlbums? SavedAlbums;
+    private SpotifySavedShows? SavedShows;
+
+    private int _offset = 0;
+    private int _limit = 50;
+
+    private HashSet<string> _animatedTracks = new();
+
+    private string _activeTab = "songs";
+
+    // --- INIT ---
+    protected override async Task OnInitializedAsync()
     {
+        Auth.LoginStateChanged += async state =>
+        {
+            if (state == LoginState.LoggedIn)
+            {
+                await LoadAll();
+                StateHasChanged();
+            }
+        };
+
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadAll();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: "Liked page loaded",
+                context: $"Offset: {_offset}, Limit: {_limit}",
+                page: "LikedPage",
+                component: "LikedContent",
+                action: "PageLoaded"
+            );
+        }
+    }
+
+    private async Task LoadAll()
+    {
+        await LoadLikedSongs();
+        SavedAlbums = await Auth.GetSavedAlbumsAsync();
+        SavedShows = await Auth.GetSavedShowsAsync();
+    }
+
+    // --- SONGS ---
+    private async Task LoadLikedSongs()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        LikedSongs = await Auth.GetLikedSongsAsync(_offset, _limit);
+
+        _animatedTracks = LikedSongs.Items
+            .Select(i => i.Track?.Id)
+            .Where(id => id != null)
+            .ToHashSet();
+    }
+
+    private RenderFragment RenderSongs() => __builder =>
+    {
+        if (Auth.State != LoginState.LoggedIn)
+        {
+            __builder.AddContent(0, "You must be logged in to view your liked songs.");
+            return;
+        }
+
+        if (LikedSongs == null)
+        {
+            __builder.AddContent(1, "Loading your liked songs…");
+            return;
+        }
+
+        if (LikedSongs.Items.Count == 0)
+        {
+            __builder.AddContent(2, "You have no liked songs.");
+            return;
+        }
+
         <ul class="track-list">
             @foreach (var t in LikedSongs.Items)
             {
@@ -72,70 +184,85 @@
             <button class="btn btn-secondary" disabled="@(_offset == 0)" @onclick="PrevPage">Previous</button>
             <button class="btn btn-secondary" disabled="@(_offset + _limit >= LikedSongs.Total)" @onclick="NextPage">Next</button>
         </div>
-    }
-</AnimatedPage>
+    };
 
-@code {
-    private SpotifyLikedSongs? LikedSongs;
-    private int _offset = 0;
-    private int _limit = 50;
-
-    // Track IDs that should animate
-    private HashSet<string> _animatedTracks = new();
-
-    protected override async Task OnInitializedAsync()
+    // --- ALBUMS ---
+    private RenderFragment RenderAlbums() => __builder =>
     {
-        Auth.LoginStateChanged += async state =>
+        if (SavedAlbums == null)
         {
-            if (state == LoginState.LoggedIn)
-            {
-                await LoadLikedSongs();
-                StateHasChanged();
-            }
-        };
-
-        if (Auth.State == LoginState.LoggedIn)
-        {
-            await LoadLikedSongs();
-
-            await Telemetry.TrackAsync(
-                level: "Info",
-                message: "Liked Songs page loaded",
-                context: $"Offset: {_offset}, Limit: {_limit}",
-                page: "LikedSongsPage",
-                component: "LikedSongsList",
-                action: "PageLoaded"
-            );
-        }
-    }
-
-    private async Task LoadLikedSongs()
-    {
-        if (Auth.State != LoginState.LoggedIn)
+            __builder.AddContent(0, "Loading albums…");
             return;
+        }
 
-        LikedSongs = await Auth.GetLikedSongsAsync(_offset, _limit);
+        if (SavedAlbums.Items.Count == 0)
+        {
+            __builder.AddContent(1, "You have no saved albums.");
+            return;
+        }
 
-        // Mark all tracks as ready to animate
-        _animatedTracks = LikedSongs.Items
-            .Select(i => i.Track?.Id)
-            .Where(id => id != null)
-            .ToHashSet();
-    }
+        foreach (var a in SavedAlbums.Items)
+        {
+            <div class="album-row mb-3 d-flex align-items-center"
+                 style="cursor:pointer"
+                 @onclick="@(() => Nav.NavigateTo($"/album/{a.Album.Id}"))">
 
+                <img src="@a.Album.Images.FirstOrDefault()?.Url"
+                     class="album-cover me-3"
+                     style="width:64px; height:64px; border-radius:4px;" />
+
+                <div>
+                    <div class="fw-bold">@a.Album.Name</div>
+                    <div>@a.Album.Artists.First().Name</div>
+                </div>
+            </div>
+        }
+    };
+
+    // --- PODCASTS ---
+    private RenderFragment RenderShows() => __builder =>
+    {
+        if (SavedShows == null)
+        {
+            __builder.AddContent(0, "Loading podcasts…");
+            return;
+        }
+
+        if (SavedShows.Items.Count == 0)
+        {
+            __builder.AddContent(1, "You have no saved podcasts.");
+            return;
+        }
+
+        foreach (var s in SavedShows.Items)
+        {
+            <div class="show-row mb-3 d-flex align-items-center"
+                 style="cursor:pointer"
+                 @onclick="@(() => Nav.NavigateTo($"/show/{s.Show.Id}"))">
+
+                <img src="@s.Show.Images.FirstOrDefault()?.Url"
+                     class="show-cover me-3"
+                     style="width:64px; height:64px; border-radius:4px;" />
+
+                <div>
+                    <div class="fw-bold">@s.Show.Name</div>
+                    <div>@s.Show.Publisher</div>
+                </div>
+            </div>
+        }
+    };
+
+    // --- PAGINATION ---
     private async Task NextPage()
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
         _offset += _limit;
         await LoadLikedSongs();
 
         await Telemetry.TrackAsync(
-            level: "Info",
-            message: "Liked Songs: Next page",
+            "Info",
+            "Liked Songs: Next page",
             context: $"Offset: {_offset}",
-            page: "LikedSongsPage",
+            page: "LikedPage",
             component: "Pagination",
             action: "NextPage"
         );
@@ -143,81 +270,52 @@
 
     private async Task PrevPage()
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
         _offset -= _limit;
         if (_offset < 0) _offset = 0;
 
         await LoadLikedSongs();
 
         await Telemetry.TrackAsync(
-            level: "Info",
-            message: "Liked Songs: Previous page",
+            "Info",
+            "Liked Songs: Previous page",
             context: $"Offset: {_offset}",
-            page: "LikedSongsPage",
+            page: "LikedPage",
             component: "Pagination",
             action: "PreviousPage"
         );
     }
 
+    // --- ACTIONS ---
     private async Task PlayTrack(SpotifyTrack track)
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Track played: {track?.Name}",
-            context: $"Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
-            page: "LikedSongsPage",
-            component: "TrackList",
-            action: "TrackPlayed"
-        );
-
-        // Find track index inside liked songs
         int index = LikedSongs.Items.FindIndex(i => i.Track.Id == track.Id);
         if (index < 0) index = 0;
 
-        // ⭐ Play inside Liked Songs playlist context
-        await Auth.PlayTrackInContextAsync(
-            "spotify:collection:tracks",
-            index
-        );
+        await Auth.PlayTrackInContextAsync("spotify:collection:tracks", index);
     }
 
     private async Task OnAlbumClicked(SpotifyTrack track)
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Album clicked: {track?.Album?.Name}",
-            context: $"Artist: {string.Join(", ", track?.Artists?.Select(a => a.Name) ?? new List<string>())}",
-            page: "LikedSongsPage",
-            component: "AlbumLink",
-            action: "AlbumClicked"
-        );
-
         Nav.NavigateTo($"/album/{track?.Album?.Id}");
     }
 
     private async Task OnArtistClicked(SpotifyArtist artist)
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
-
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Artist clicked: {artist?.Name}",
-            context: null,
-            page: "LikedSongsPage",
-            component: "ArtistLink",
-            action: "ArtistClicked"
-        );
-
         Nav.NavigateTo($"/artist/{artist.Id}");
+    }
+
+    private void SwitchTab(string tab)
+    {
+        _activeTab = tab;
+
+        Telemetry.TrackAsync(
+            "Info",
+            $"Liked tab switched: {tab}",
+            context: null,
+            page: "LikedPage",
+            component: "TabSwitch",
+            action: "TabChanged"
+        );
     }
 
     private string FormatDuration(int ms)

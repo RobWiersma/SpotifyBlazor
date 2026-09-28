@@ -478,14 +478,14 @@ public class SpotifyAuthService
         return await res.Content.ReadFromJsonAsync<SpotifyUserProfile>();
     }
 
-    public async Task<SpotifyNowPlaying?> GetNowPlayingAsync()
+    public async Task<SpotifyPlayerState?> GetNowPlayingAsync()
     {
         _logger.LogInformation("GetNowPlayingAsync: Fetching now playing");
 
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
-            "https://api.spotify.com/v1/me/player/currently-playing");
+            "https://api.spotify.com/v1/me/player/");
 
         if (!string.IsNullOrEmpty(AccessToken))
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
@@ -497,7 +497,7 @@ public class SpotifyAuthService
         if (!res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.NoContent)
             return null;
 
-        return await res.Content.ReadFromJsonAsync<SpotifyNowPlaying>();
+        return await res.Content.ReadFromJsonAsync<SpotifyPlayerState>();
     }
 
     public async Task SkipToNextAsync()
@@ -1364,6 +1364,42 @@ public class SpotifyAuthService
 
         var req = new HttpRequestMessage(HttpMethod.Delete, url);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        await _http.SendAsync(req);
+    }
+
+    public async Task SetShuffleAsync(bool enabled)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"https://api.spotify.com/v1/me/player/shuffle?state={(enabled ? "true" : "false")}"
+        );
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        await _http.SendAsync(req);
+    }
+
+    public async Task SetRepeatAsync(string mode)
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"https://api.spotify.com/v1/me/player/repeat?state={mode}"
+        );
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
 
         await _http.SendAsync(req);
     }

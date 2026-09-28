@@ -27,31 +27,46 @@
             <strong class="track-title">@current.Item.Name</strong>
             <span class="track-artist">@string.Join(", ", current.Item.Artists.Select(a => a.Name))</span>
         </div>
+        <div class="fav-btn">
+            @if (_isFavorite)
+            {
+                <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
+                    💚
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
+                    ➕
+                </button>
+            }
+        </div>
 
 
         <div class="player-controls-wrapper d-flex flex-column align-items-center">
 
             <div class="player-controls d-flex align-items-center gap-3">
-                <div class="fav-btn">
-                    @if (_isFavorite)
-                    {
-                        <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
-                            💚
-                        </button>
-                    }
-                    else
-                    {
-                        <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
-                            ➕
-                        </button>
-                    }
-                </div>
 
+                <button class="btn btn-sm btn-dark" @onclick="ToggleShuffle">
+                    @(shuffleEnabled ? "🔀" : "➡️")
+                </button>
                 <button class="btn btn-sm btn-dark" @onclick="PrevTrack">⏮</button>
                 <button class="btn btn-sm btn-dark" @onclick="TogglePlayPause">
                     @(current?.IsPlaying == true ? "⏸" : "▶️")
                 </button>
                 <button class="btn btn-sm btn-dark" @onclick="NextTrack">⏭</button>
+
+                <button class="btn btn-sm btn-dark" @onclick="ToggleRepeat">
+                    @(
+                        repeatMode switch
+                        {
+                            "off" => "🔁",        // repeat off
+                            "context" => "🔂",    // repeat playlist/album
+                            "track" => "🔂🎵",    // repeat single track
+                            _ => "🔁"
+                        }
+                    )
+                </button>
             </div>
 
             <div class="playerbar-progress w-100 mt-3">
@@ -94,10 +109,13 @@
 </div>
 
 @code {
+    private bool shuffleEnabled = false;
+    private string repeatMode = "off";
+
     private IJSObjectReference? jsModule;
     private VolumePopup VolumePopup;
 
-    private SpotifyNowPlaying? current;
+    private SpotifyPlayerState? current;
     private bool refreshLoopStarted = false;
     private int apiRefreshCounter = 0;
 
@@ -194,10 +212,16 @@
 
     private async Task LoadNowPlaying()
     {
-        if (Auth.State != LoginState.LoggedIn)
-            return;
+        var now = await Auth.GetNowPlayingAsync();
 
-        current = await Auth.GetNowPlayingAsync();
+        if (now != null)
+        {
+            current = now;
+            shuffleEnabled = now.ShuffleState;
+            repeatMode = now.RepeatState;
+        }
+
+        StateHasChanged();
     }
 
     private async Task UpdateFavoriteState()
@@ -312,4 +336,46 @@
         StateHasChanged();
     }
 
+    private async Task ToggleShuffle()
+    {
+        shuffleEnabled = !shuffleEnabled;
+
+        await Telemetry.TrackTimedAsync(
+            "Info",
+            shuffleEnabled ? "PlayerBar.ShuffleOn" : "PlayerBar.ShuffleOff",
+            async () =>
+            {
+                await Auth.SetShuffleAsync(shuffleEnabled);
+            },
+            context: shuffleEnabled ? "User enabled shuffle" : "User disabled shuffle",
+            page: NavigationManager.Uri,
+            component: nameof(PlayerBar),
+            actionName: shuffleEnabled ? "ShuffleOn" : "ShuffleOff"
+        );
+
+        StateHasChanged();
+    }
+
+    private async Task ToggleRepeat()
+    {
+        repeatMode = repeatMode switch
+        {
+            "off" => "context",
+            "context" => "track",
+            "track" => "off",
+            _ => "off"
+        };
+
+        await Telemetry.TrackTimedAsync(
+            "Info",
+            $"PlayerBar.Repeat.{repeatMode}",
+            async () => await Auth.SetRepeatAsync(repeatMode),
+            context: $"Repeat mode changed to {repeatMode}",
+            page: NavigationManager.Uri,
+            component: nameof(PlayerBar),
+            actionName: $"Repeat.{repeatMode}"
+        );
+
+        StateHasChanged();
+    }
 }

@@ -6,63 +6,59 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<div id="playerbar" class="playerbar d-flex align-items-center gap-3 px-3 py-2">
+<div id="playerbar" class="playerbar d-flex align-items-center px-3 py-2">
 
     @if (Auth.State != LoginState.LoggedIn)
     {
-        <span class="text-light small">
+        <div class="pb-center text-light small">
             @(Auth.State == LoginState.LoggingIn
                 ? "Connecting to Spotify…"
                 : Auth.State == LoginState.LoginFailed
                     ? "Login failed"
                     : "Not logged in")
-        </span>
+        </div>
     }
     else if (current?.Item != null)
     {
-        <img src="@current.Item.Album.Images.FirstOrDefault()?.Url"
-             class="playerbar-art" @onclick="GoToNowPlaying" />
+        <!-- LEFT SECTION (max 30%) -->
+        <div class="pb-left d-flex align-items-center gap-3">
+            <img src="@current.Item.Album.Images.FirstOrDefault()?.Url"
+                 class="playerbar-art" @onclick="GoToNowPlaying" />
 
-        <div class="track-info">
-            <strong class="track-title">@current.Item.Name</strong>
-            <span class="track-artist">@string.Join(", ", current.Item.Artists.Select(a => a.Name))</span>
-        </div>
-        <div class="fav-btn">
-            @if (_isFavorite)
-            {
+            <div class="track-info">
+                <strong class="track-title">@current.Item.Name</strong>
+                <span class="track-artist">@string.Join(", ", current.Item.Artists.Select(a => a.Name))</span>
+            </div>
+
+            <div class="fav-btn">
                 <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
-                    💚
+                    @(_isFavorite ? "💚" : "➕")
                 </button>
-            }
-            else
-            {
-                <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
-                    ➕
-                </button>
-            }
+            </div>
         </div>
 
-
-        <div class="player-controls-wrapper d-flex flex-column align-items-center">
-
+        <!-- CENTER SECTION (perfectly centered controls) -->
+        <div class="pb-center d-flex flex-column align-items-center">
             <div class="player-controls d-flex align-items-center gap-3">
-
                 <button class="btn btn-sm btn-dark" @onclick="ToggleShuffle">
                     @(shuffleEnabled ? "🔀" : "➡️")
                 </button>
+
                 <button class="btn btn-sm btn-dark" @onclick="PrevTrack">⏮</button>
+
                 <button class="btn btn-sm btn-dark" @onclick="TogglePlayPause">
                     @(current?.IsPlaying == true ? "⏸" : "▶️")
                 </button>
+
                 <button class="btn btn-sm btn-dark" @onclick="NextTrack">⏭</button>
 
                 <button class="btn btn-sm btn-dark" @onclick="ToggleRepeat">
                     @(
                         repeatMode switch
                         {
-                            "off" => "🔁",        // repeat off
-                            "context" => "🔂",    // repeat playlist/album
-                            "track" => "🔂🎵",    // repeat single track
+                            "off" => "🔁",
+                            "context" => "🔂",
+                            "track" => "🔂🎵",
                             _ => "🔁"
                         }
                     )
@@ -81,32 +77,36 @@
             </div>
         </div>
 
-        <button class="mobile-tools-toggle btn btn-dark d-md-none" @onclick="ToggleMobileTools">
-            ⚙️ Options
-        </button>
-
-        @if (showMobileTools)
-        {
-            <div class="mobile-tools-panel d-md-none">
+        <!-- RIGHT SECTION (mirrors left width) -->
+        <div class="pb-right d-flex align-items-center gap-3">
+            <div class="desktop-tools d-none d-md-block">
                 <VolumePopup @ref="VolumePopup" />
+            </div>
+
+            <div class="desktop-tools d-none d-md-block">
                 <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
             </div>
-        }
 
-        <div class="desktop-tools d-none d-md-block">
-            <VolumePopup @ref="VolumePopup" />
-        </div>
+            <button class="mobile-tools-toggle btn btn-dark d-md-none" @onclick="ToggleMobileTools">
+                ⚙️ Options
+            </button>
 
-        <div class="desktop-tools d-none d-md-block">
-            <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
+            @if (showMobileTools)
+            {
+                <div class="mobile-tools-panel d-md-none">
+                    <VolumePopup @ref="VolumePopup" />
+                    <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
+                </div>
+            }
         </div>
     }
     else
     {
-        <span>No music playing</span>
+        <div class="pb-center text-light">No music playing</div>
     }
 
 </div>
+
 
 @code {
     private bool shuffleEnabled = false;

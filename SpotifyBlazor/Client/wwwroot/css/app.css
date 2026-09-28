@@ -1127,6 +1127,64 @@ a:hover {
     .playerbar-fav-btn .fa-solid {
         color: #1DB954;
     }
+
+.pb-left {
+    flex: 0 1 30;
+    max-width: 30;
+    overflow: hidden;
+}
+
+    .pb-left .track-info {
+        min-width: 0; /* critical for ellipsis */
+    }
+
+    .pb-left .track-title,
+    .pb-left .track-artist {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+.playerbar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+/* LEFT: max 30% */
+.pb-left {
+    flex: 0 1 30%;
+    max-width: 30%;
+    overflow: hidden;
+}
+
+    .pb-left .track-info {
+        min-width: 0;
+    }
+
+    .pb-left .track-title,
+    .pb-left .track-artist {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+/* CENTER: true centered block */
+.pb-center {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* RIGHT: mirrors left width */
+.pb-right {
+    flex: 0 1 30%;
+    max-width: 30%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
     
     /* --- Responsive --- */
     @media (max-width: 768px) {

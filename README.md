@@ -1,127 +1,69 @@
 https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
 
-SpotifyBlazor — A Modern Spotify Web Client Built with Blazor WebAssembly
+# SpotifyBlazor
 
-A fast, responsive, Spotify‑connected web experience built with Blazor WebAssembly, featuring real‑time playback controls, device switching, dynamic UI layout, and a clean, Spotify‑inspired interface. This project integrates deeply with the Spotify Web API and Web Playback SDK to deliver a native-feeling music experience entirely in the browser.
+![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)
+![Blazor](https://img.shields.io/badge/Blazor-WebApp-512BD4)
+![C#](https://img.shields.io/badge/C%23-Developer-blue)
+![Spotify Web API](https://img.shields.io/badge/Spotify-Web%20API-1DB954)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-success)
+![Platform](https://img.shields.io/badge/Platform-Web-lightgrey)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
+![App Insights](https://img.shields.io/badge/Application%20Insights-Enabled-purple)
+![Auth](https://img.shields.io/badge/Auth-JWT%20%2B%20OAuth-orange)
 
-✨ Features
-🎧 Full Spotify Playback Integration
-```
-    Play, pause, skip, and control volume
+A modern Blazor Web App that integrates with the Spotify Web API to deliver a full music + podcast experience—playback, liked content, albums, artists, shows, search, and real‑time telemetry.
 
-    Device switching between available Spotify devices
+---
 
-    Real-time player state updates
+## Overview
 
-    Album art, track metadata, and progress bar
-```
-📱 Dynamic Player Bar
-```
-    Auto-resizes based on content
+SpotifyBlazor is a full‑stack .NET application that brings Spotify’s ecosystem into a clean, responsive Blazor interface. It supports OAuth login, playback control, browsing liked songs/albums/shows, album & artist pages, podcast show pages, and Application Insights telemetry.
 
-    JS interop for measuring height and updating layout
+---
 
-    CSS variable–driven responsive spacing
+## Features
 
-    Smooth transitions and mobile-friendly behavior
-```
-🕒 Recently Played History
-```
-    Paginated history view
+- Spotify OAuth login + automatic token refresh  
+- Now Playing with playback controls  
+- Liked Songs, Saved Albums, Saved Podcasts  
+- Album, Artist, and Podcast Show pages  
+- Search across tracks, artists, albums  
+- Application Insights telemetry  
+- Clean Blazor components + modern UI  
 
-    Artist and album navigation
+---
 
-    Local time formatting
+## Tech Stack
 
-    Clean, Spotify-style track list layout
-```
-🔐 Secure Authentication
-```
-    Spotify OAuth 2.0 Authorization Code flow
+- Blazor Web App (SSR + WASM)  
+- ASP.NET Core backend  
+- Spotify Web API  
+- JWT authentication  
+- Application Insights  
+- C# / .NET 8  
 
-    Token exchange and refresh
+---
 
-    Local storage persistence
+## Project Structure
 
-    Logged-in state tracking
-```
-📊 Telemetry & Diagnostics
-```
-    Application Insights integration
-
-    Structured logging for API calls, playback events, and UI actions
-
-    Timed operations for performance measurement
-```
-⚡ Built for Performance
-```
-    Blazor WebAssembly
-
-    Minimal API backend
-
-    Efficient caching of Spotify responses
-
-    Lightweight JS modules for UI measurement
-```
-🛠️ Tech Stack
-```
-Area	Technology
-Frontend	Blazor WebAssembly, C#, Razor Components
-Backend	.NET Minimal API
-Auth	Spotify OAuth 2.0
-Playback	Spotify Web Playback SDK
-UI	Bootstrap 5, custom CSS
-Interop	JavaScript modules (playerbar.js)
-Logging	Application Insights
-Hosting	Azure App Service
-```
-
-🚀 Getting Started
-1. Clone the repo
-bash
-
-git clone 
-
-2. Configure Spotify API
-
-Create a Spotify app at:
-https://developer.spotify.com/dashboard
-
-Add your redirect URI:
-Code
-
-https://localhost:7151/auth/callback
-
-Then update your configuration:
-Code
-```
-ClientId: "<your-client-id>"
-ClientSecret: "<your-client-secret>"
-RedirectUri: "https://localhost:7151/auth/callback"
-```
-3. Run the project
-bash
-
-dotnet run
-
-The app will launch at:
-Code
-
-https://localhost:7151
-
-📂 Project Structure
-Code
 ```
 SpotifyBlazor/
-│
-├── Client/                # Blazor WebAssembly frontend
-│   ├── Components/        # UI components
-│   ├── Services/          # Auth, Playback, Telemetry
-│   ├── wwwroot/           # Static assets + JS modules
-│   └── App.razor
-│
-├── Server/                # Minimal API backend
-│   └── Controllers/
-│
-└── Shared/                # Shared models (Track, Artist, History)
+├── Client/      # Blazor UI
+├── Server/      # API, auth, telemetry
+└── Shared/      # Models
 ```
+
+
+## Running Locally
+
+Create a Spotify Developer App
+
+Add your Client ID + Redirect URI
+
+Configure JWT + AI settings
+
+Run backend: dotnet run --project SpotifyBlazor
+
+Visit: https://localhost:7151

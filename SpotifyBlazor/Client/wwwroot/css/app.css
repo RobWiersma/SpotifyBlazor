@@ -1101,17 +1101,44 @@ a:hover {
             transform: scale(1.05);
         }
 
-/* --- Responsive --- */
-@media (max-width: 768px) {
-    .show-header {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
+.playerbar-fav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 4px;
+}
+
+    .playerbar-fav-btn i {
+        font-size: 18px;
+        transition: transform 0.15s ease, color 0.2s ease;
     }
 
-    .show-cover {
-        width: 140px;
-        height: 140px;
+    .playerbar-fav-btn:hover i {
+        color: #1DB954;
     }
-}
+
+    .playerbar-fav-btn:active i {
+        transform: scale(1.25);
+    }
+
+    .playerbar-fav-btn .fa-solid {
+        color: #1DB954;
+    }
+    
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
+        .show-header {
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .show-cover {
+            width: 140px;
+            height: 140px;
+        }
+    }
 

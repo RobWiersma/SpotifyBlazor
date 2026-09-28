@@ -1325,4 +1325,47 @@ public class SpotifyAuthService
         await _http.SendAsync(req);
     }
 
+    public async Task<bool> IsFavoriteAsync(string spotifyUri)
+    {
+        await RefreshIfNeededAsync();
+
+        var url = $"https://api.spotify.com/v1/me/library/contains?uris={Uri.EscapeDataString(spotifyUri)}";
+
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+        if (!response.IsSuccessStatusCode)
+            return false;
+
+        var result = await response.Content.ReadFromJsonAsync<bool[]>();
+        return result?.FirstOrDefault() ?? false;
+    }
+
+    public async Task SaveToLibraryAsync(params string[] spotifyUris)
+    {
+        await RefreshIfNeededAsync();
+
+        var uriList = string.Join(",", spotifyUris.Select(Uri.EscapeDataString));
+        var url = $"https://api.spotify.com/v1/me/library?uris={uriList}";
+
+        var req = new HttpRequestMessage(HttpMethod.Put, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        await _http.SendAsync(req);
+    }
+
+    public async Task RemoveFromLibraryAsync(params string[] spotifyUris)
+    {
+        await RefreshIfNeededAsync();
+
+        var uriList = string.Join(",", spotifyUris.Select(Uri.EscapeDataString));
+        var url = $"https://api.spotify.com/v1/me/library?uris={uriList}";
+
+        var req = new HttpRequestMessage(HttpMethod.Delete, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        await _http.SendAsync(req);
+    }
+
 }

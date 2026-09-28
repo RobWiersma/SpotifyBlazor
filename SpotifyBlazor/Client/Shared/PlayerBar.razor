@@ -28,9 +28,25 @@
             <span class="track-artist">@string.Join(", ", current.Item.Artists.Select(a => a.Name))</span>
         </div>
 
+
         <div class="player-controls-wrapper d-flex flex-column align-items-center">
 
             <div class="player-controls d-flex align-items-center gap-3">
+                <div class="fav-btn">
+                    @if (_isFavorite)
+                    {
+                        <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
+                            💚
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
+                            ➕
+                        </button>
+                    }
+                </div>
+
                 <button class="btn btn-sm btn-dark" @onclick="PrevTrack">⏮</button>
                 <button class="btn btn-sm btn-dark" @onclick="TogglePlayPause">
                     @(current?.IsPlaying == true ? "⏸" : "▶️")
@@ -85,6 +101,8 @@
     private bool refreshLoopStarted = false;
     private int apiRefreshCounter = 0;
 
+    private bool _isFavorite = false;
+
     private ElementReference progressBarRef;
     private bool showMobileTools = false;
 
@@ -108,6 +126,7 @@
             if (state == LoginState.LoggedIn)
             {
                 await LoadNowPlaying();
+                await UpdateFavoriteState();
                 StartRefreshLoop();
                 StateHasChanged();
             }
@@ -124,6 +143,7 @@
             {
                 apiRefreshCounter = 0;
                 await LoadNowPlaying();
+                await UpdateFavoriteState();
                 StateHasChanged();
             }
         };
@@ -131,6 +151,7 @@
         if (Auth.State == LoginState.LoggedIn)
         {
             await LoadNowPlaying();
+            await UpdateFavoriteState();
             StartRefreshLoop();
         }
     }
@@ -164,6 +185,7 @@
             {
                 apiRefreshCounter = 0;
                 await LoadNowPlaying();
+                await UpdateFavoriteState();
             }
 
             StateHasChanged();
@@ -176,6 +198,18 @@
             return;
 
         current = await Auth.GetNowPlayingAsync();
+    }
+
+    private async Task UpdateFavoriteState()
+    {
+        if (current?.Item == null)
+        {
+            _isFavorite = false;
+            return;
+        }
+
+        string uri = $"spotify:{current.Item.Type}:{current.Item.Id}";
+        _isFavorite = await Auth.IsFavoriteAsync(uri);
     }
 
     private string FormatTime(int ms)
@@ -191,6 +225,7 @@
 
         await Auth.SkipToPreviousAsync();
         await LoadNowPlaying();
+        await UpdateFavoriteState();
         StateHasChanged();
     }
 
@@ -211,6 +246,7 @@
             await Task.Delay(200);
         }
 
+        await UpdateFavoriteState();
         StateHasChanged();
     }
 
@@ -227,6 +263,7 @@
             await Auth.PlayAsync();
 
         await LoadNowPlaying();
+        await UpdateFavoriteState();
         StateHasChanged();
     }
 
@@ -258,4 +295,21 @@
     {
         Nav.NavigateTo("/nowplaying");
     }
+
+    private async Task ToggleFavorite()
+    {
+        if (current?.Item == null)
+            return;
+
+        string uri = $"spotify:{current.Item.Type}:{current.Item.Id}";
+
+        if (_isFavorite)
+            await Auth.RemoveFromLibraryAsync(uri);
+        else
+            await Auth.SaveToLibraryAsync(uri);
+
+        _isFavorite = !_isFavorite;
+        StateHasChanged();
+    }
+
 }

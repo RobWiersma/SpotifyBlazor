@@ -1200,3 +1200,47 @@ a:hover {
         }
     }
 
+/* MOBILE FIX — force PlayerBar into a vertical layout */
+@media (max-width: 768px) {
+
+    #playerbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        height: 210px;
+    }
+
+    /* All sections become full width */
+    .pb-left,
+    .pb-center,
+    .pb-right {
+        flex: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        justify-content: center !important;
+    }
+
+    /* Left section aligns normally */
+    .pb-left {
+        justify-content: flex-start !important;
+    }
+
+    /* Center controls MUST stay visible */
+    .player-controls {
+        justify-content: center !important;
+        width: 100% !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Progress bar stays full width */
+    .playerbar-progress {
+        width: 100% !important;
+    }
+
+    /* Prevent album art from shrinking too small */
+    .playerbar-art {
+        width: 64px !important;
+        height: 64px !important;
+    }
+}

@@ -223,13 +223,20 @@
             if (Auth.State != LoginState.LoggedIn)
                 continue;
 
+            if (current?.IsPlaying == true && current.Item != null)
+            {
+                current.ProgressMs += 1000;
+
+                if (current.ProgressMs > current.Item.DurationMs)
+                    current.ProgressMs = current.Item.DurationMs;
+            }
+
             apiRefreshCounter++;
 
             if (apiRefreshCounter >= 10)
             {
                 apiRefreshCounter = 0;
                 await LoadNowPlaying();
-                //await UpdateFavoriteState();
             }
 
             StateHasChanged();

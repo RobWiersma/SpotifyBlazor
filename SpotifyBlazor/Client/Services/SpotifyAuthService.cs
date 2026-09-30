@@ -485,7 +485,7 @@ public class SpotifyAuthService
         await RefreshIfNeededAsync();
 
         var req = new HttpRequestMessage(HttpMethod.Get,
-            "https://api.spotify.com/v1/me/player/");
+            "https://api.spotify.com/v1/me/player?additional_types=episode");
 
         if (!string.IsNullOrEmpty(AccessToken))
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
@@ -497,7 +497,13 @@ public class SpotifyAuthService
         if (!res.IsSuccessStatusCode || res.StatusCode == System.Net.HttpStatusCode.NoContent)
             return null;
 
-        return await res.Content.ReadFromJsonAsync<SpotifyPlayerState>();
+        var json = await res.Content.ReadAsStringAsync();
+
+        _logger.LogInformation(json);
+
+        var returnObj = await res.Content.ReadFromJsonAsync<SpotifyPlayerState>();
+
+        return returnObj;
     }
 
     public async Task SkipToNextAsync()

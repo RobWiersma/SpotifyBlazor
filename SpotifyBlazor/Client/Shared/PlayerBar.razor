@@ -22,19 +22,29 @@
     {
         <!-- LEFT SECTION (max 30%) -->
         <div class="pb-left d-flex align-items-center gap-3">
-            <img src="@current.Item.Album.Images.FirstOrDefault()?.Url"
-                 class="playerbar-art" @onclick="GoToNowPlaying" />
+            <img src="@Artwork"
+                 class="playerbar-art"
+                 @onclick="GoToNowPlaying"/>
 
             <div class="track-info">
-                <strong class="track-title">@current.Item.Name</strong>
-                <span class="track-artist">@string.Join(", ", current.Item.Artists.Select(a => a.Name))</span>
+                <strong class="track-title">
+                    @current?.Item?.Name
+                </strong>
+
+                <span class="track-artist">
+                    @Subtitle
+                </span>
             </div>
 
-            <div class="fav-btn">
-                <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
-                    @(_isFavorite ? "💚" : "➕")
-                </button>
-            </div>
+            @if (!IsEpisode)
+            {
+                <div class="fav-btn">
+                    <button class="btn btn-sm btn-dark" @onclick="ToggleFavorite">
+                        @(_isFavorite ? "💚" : "➕")
+                    </button>
+                </div>
+            }
+
         </div>
 
         <!-- CENTER SECTION (perfectly centered controls) -->
@@ -109,6 +119,22 @@
 
 
 @code {
+    private bool IsEpisode =>
+    current?.CurrentlyPlayingType == "episode";
+
+    private string Artwork =>
+    current?.Item?.Album?.Images?.FirstOrDefault()?.Url
+    ?? current?.Item?.Images?.FirstOrDefault()?.Url
+    ?? current?.Item?.Show?.Images?.FirstOrDefault()?.Url
+    ?? "";
+
+    private string Subtitle =>
+    IsEpisode
+    ? current?.Item?.Show?.Name ?? ""
+    : string.Join(", ",
+    current?.Item?.Artists?.Select(a => a.Name)
+    ?? Enumerable.Empty<string>());
+
     private bool shuffleEnabled = false;
     private string repeatMode = "off";
 
@@ -226,7 +252,7 @@
 
     private async Task UpdateFavoriteState()
     {
-        if (current?.Item == null)
+        if (current?.Item == null || current.Item.Type == "episode")
         {
             _isFavorite = false;
             return;
@@ -322,7 +348,7 @@
 
     private async Task ToggleFavorite()
     {
-        if (current?.Item == null)
+        if (current?.Item == null || current.Item.Type == "episode")
             return;
 
         string uri = $"spotify:{current.Item.Type}:{current.Item.Id}";

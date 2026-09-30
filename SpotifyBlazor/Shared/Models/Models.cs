@@ -715,7 +715,7 @@ public class SpotifyDevice
         public int ProgressMs { get; set; }
 
         [JsonPropertyName("item")]
-        public SpotifyTrack Item { get; set; }
+        public SpotifyItem Item { get; set; }
 
         [JsonPropertyName("currently_playing_type")]
         public string CurrentlyPlayingType { get; set; }
@@ -910,6 +910,35 @@ public class SpotifyContext
     {
         public List<SpotifyEpisode> Items { get; set; } = new();
         public int Total { get; set; }
+    }
+
+    public class SpotifyItem
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("duration_ms")]
+        public int DurationMs { get; set; }
+
+        // TRACKS
+        [JsonPropertyName("album")]
+        public SpotifyAlbum? Album { get; set; }
+
+        [JsonPropertyName("artists")]
+        public List<SpotifyArtist>? Artists { get; set; }
+
+        // EPISODES
+        [JsonPropertyName("show")]
+        public SpotifyShow? Show { get; set; }
+
+        [JsonPropertyName("images")]
+        public List<SpotifyImage>? Images { get; set; }
     }
 }
 

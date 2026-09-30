@@ -1,4 +1,6 @@
 ﻿@page "/show/{ShowId}"
+@implements IDisposable
+
 @using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Services
 @inject SpotifyAuthService Auth
@@ -57,23 +59,74 @@
     private SpotifyShow? _show;
     private SpotifyShowEpisodes? _episodes;
 
+
+    // --- INIT ---
+
     protected override async Task OnInitializedAsync()
+    {
+        Auth.LoginStateChanged += HandleLoginStateChanged;
+        Auth.OnPlaybackChanged += HandlePlaybackChangedAsync;
+
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadShow();
+
+            await Telemetry.TrackAsync(
+                "Info",
+                $"Show page loaded: {_show?.Name}",
+                context: $"ShowId: {ShowId}",
+                page: "ShowPage",
+                component: "ShowDetail",
+                action: "PageLoaded"
+            );
+        }
+    }
+
+
+    // --- EVENTS ---
+
+    private async void HandleLoginStateChanged(LoginState state)
+    {
+        if (state == LoginState.LoggedIn)
+        {
+            await LoadShow();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandlePlaybackChangedAsync()
+    {
+        // Playback changed elsewhere in the application.
+        //
+        // The show/episode data itself hasn't changed, so there
+        // is no need to make another Spotify API request here.
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+    // --- DISPOSE ---
+
+    public void Dispose()
+    {
+        Auth.LoginStateChanged -= HandleLoginStateChanged;
+        Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
+    }
+
+
+    // --- LOAD SHOW ---
+
+    private async Task LoadShow()
     {
         if (Auth.State != LoginState.LoggedIn)
             return;
 
         _show = await Auth.GetShowAsync(ShowId);
         _episodes = await Auth.GetShowEpisodesAsync(ShowId);
-
-        await Telemetry.TrackAsync(
-            "Info",
-            $"Show page loaded: {_show?.Name}",
-            context: $"ShowId: {ShowId}",
-            page: "ShowPage",
-            component: "ShowDetail",
-            action: "PageLoaded"
-        );
     }
+
+
+    // --- PLAYBACK ---
 
     private async Task PlayEpisode(SpotifyEpisode ep)
     {
@@ -86,6 +139,8 @@
             action: "EpisodePlayed"
         );
 
+        // SpotifyAuthService raises OnPlaybackChanged
+        // after the playback request succeeds.
         await Auth.PlayEpisodeAsync(ep.Id);
     }
 }

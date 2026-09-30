@@ -16,11 +16,7 @@ public class SpotifyAuthService
     public string? RefreshToken { get; private set; }
     public DateTime ExpiresAt { get; private set; }
 
-    public event Action? OnChange;
-    private void NotifyStateChanged() => OnChange?.Invoke();
-
-    public event Action? OnPlaybackChanged;
-    private void NotifyPlaybackChanged() => OnPlaybackChanged?.Invoke();
+    public event Func<Task>? OnPlaybackChanged;
 
     public string ApiJwt { get; private set; }
 
@@ -441,7 +437,7 @@ public class SpotifyAuthService
 
         return res;
     }
-
+    
     public async Task LogoutAsync()
     {
         _logger.LogInformation("LogoutAsync: Clearing tokens and localStorage");
@@ -453,7 +449,7 @@ public class SpotifyAuthService
         await _js.InvokeVoidAsync("localStorage.removeItem", StorageKey);
 
         _logger.LogInformation("LogoutAsync: Tokens cleared, notifying state change");
-        NotifyStateChanged();
+        await NotifyPlaybackChangedAsync();
     }
 
     public async Task<SpotifyUserProfile?> GetUserProfileAsync()
@@ -512,15 +508,22 @@ public class SpotifyAuthService
 
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Post,
+        var req = new HttpRequestMessage(
+            HttpMethod.Post,
             "https://api.spotify.com/v1/me/player/next");
 
         if (!string.IsNullOrEmpty(AccessToken))
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
 
-        _logger.LogInformation("SkipToNextAsync: Response {StatusCode}", res.StatusCode);
+        _logger.LogInformation(
+            "SkipToNextAsync: Response {StatusCode}",
+            res.StatusCode);
+
+        if (res.IsSuccessStatusCode)
+            await NotifyPlaybackChangedAsync();
     }
 
     public async Task SkipToPreviousAsync()
@@ -529,15 +532,22 @@ public class SpotifyAuthService
 
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Post,
+        var req = new HttpRequestMessage(
+            HttpMethod.Post,
             "https://api.spotify.com/v1/me/player/previous");
 
         if (!string.IsNullOrEmpty(AccessToken))
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
 
-        _logger.LogInformation("SkipToPreviousAsync: Response {StatusCode}", res.StatusCode);
+        _logger.LogInformation(
+            "SkipToPreviousAsync: Response {StatusCode}",
+            res.StatusCode);
+
+        if (res.IsSuccessStatusCode)
+            await NotifyPlaybackChangedAsync();
     }
 
     public async Task PauseAsync()
@@ -546,15 +556,22 @@ public class SpotifyAuthService
 
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Put,
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/pause");
 
         if (!string.IsNullOrEmpty(AccessToken))
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
 
-        _logger.LogInformation("PauseAsync: Response {StatusCode}", res.StatusCode);
+        _logger.LogInformation(
+            "PauseAsync: Response {StatusCode}",
+            res.StatusCode);
+
+        if (res.IsSuccessStatusCode)
+            await NotifyPlaybackChangedAsync();
     }
 
     public async Task PlayAsync()
@@ -572,6 +589,8 @@ public class SpotifyAuthService
         var res = await _http.SendAsync(req);
 
         _logger.LogInformation("PlayAsync: Response {StatusCode}", res.StatusCode);
+
+        await NotifyPlaybackChangedAsync();
     }
 
     public async Task PlayTrackInContextAsync(string contextUri, int trackIndex)
@@ -598,7 +617,8 @@ public class SpotifyAuthService
 
         _logger.LogInformation("PlayTrackInContextAsync: Response {StatusCode}", res.StatusCode);
 
-        NotifyPlaybackChanged();
+        if (res.IsSuccessStatusCode)
+            await NotifyPlaybackChangedAsync();
     }
 
     public async Task<SpotifyLikedSongs?> GetLikedSongsAsync(int offset = 0, int limit = 50)
@@ -1069,6 +1089,9 @@ public class SpotifyAuthService
         Console.WriteLine($"TransferPlaybackAsync: {res.StatusCode}");
         Console.WriteLine(await res.Content.ReadAsStringAsync());
 
+        if (res.IsSuccessStatusCode)
+            await NotifyPlaybackChangedAsync();
+
         return res.IsSuccessStatusCode;
     }
 
@@ -1320,15 +1343,20 @@ public class SpotifyAuthService
             uris = new[] { $"spotify:episode:{episodeId}" }
         };
 
-        var req = new HttpRequestMessage(HttpMethod.Put,
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/play")
         {
             Content = JsonContent.Create(body)
         };
 
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        await _http.SendAsync(req);
+        var res = await _http.SendAsync(req);
+
+        if (res.IsSuccessStatusCode)
+            await NotifyPlaybackChangedAsync();
     }
 
     public async Task<bool> IsFavoriteAsync(string spotifyUri)
@@ -1408,6 +1436,25 @@ public class SpotifyAuthService
         }
 
         await _http.SendAsync(req);
+    }
+
+    public async Task RaisePlaybackChangedAsync()
+    {
+        await NotifyPlaybackChangedAsync();
+    }
+
+    private async Task NotifyPlaybackChangedAsync()
+    {
+        if (OnPlaybackChanged == null)
+            return;
+
+        foreach (var handler in OnPlaybackChanged.GetInvocationList())
+        {
+            if (handler is Func<Task> callback)
+            {
+                await callback();
+            }
+        }
     }
 
 }

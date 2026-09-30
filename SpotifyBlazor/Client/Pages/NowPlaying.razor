@@ -1,10 +1,12 @@
 ﻿@using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Services
 @page "/nowplaying"
+@implements IDisposable
 @inject SpotifyAuthService Auth
 @inject NavigationManager Nav
 @inject TelemetryService Telemetry
 @inject IJSRuntime JS
+
 
 <AnimatedPage>
     @if (_nowPlaying == null)
@@ -113,6 +115,7 @@
     private ElementReference _lyricsPanelRef;
     private IJSObjectReference? _lyricsModule;
 
+
     private int _apiCounter;
 
     private string AlbumImage =>
@@ -128,24 +131,8 @@
         if (Auth.State == LoginState.LoggedIn)
             await ReloadNowPlaying();
 
-        Auth.LoginStateChanged += async state =>
-        {
-            if (state == LoginState.LoggedIn)
-            {
-                await ReloadNowPlaying();
-                StateHasChanged();
-            }
-        };
-
-        Auth.OnPlaybackChanged += async () =>
-        {
-            await ReloadNowPlaying();
-
-            if (_showLyrics)
-                await LoadLyricsAsync();
-
-            StateHasChanged();
-        };
+        Auth.LoginStateChanged += HandleLoginStateChanged;
+        Auth.OnPlaybackChanged += HandlePlaybackChangedAsync;
 
         await Telemetry.TrackAsync(
             "Info",
@@ -155,6 +142,31 @@
             component: "NowPlaying",
             action: "PageLoaded"
         );
+    }
+
+    public void Dispose()
+    {
+        Auth.LoginStateChanged -= HandleLoginStateChanged;
+        Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
+    }
+
+    private async Task HandlePlaybackChangedAsync()
+    {
+        await ReloadNowPlaying();
+
+        if (_showLyrics)
+            await LoadLyricsAsync();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void HandleLoginStateChanged(LoginState state)
+    {
+        if (state == LoginState.LoggedIn)
+        {
+            await ReloadNowPlaying();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void HideLyrics()
@@ -236,14 +248,11 @@
     private async Task PrevTrack()
     {
         await Auth.SkipToPreviousAsync();
-        await ReloadNowPlaying();
     }
 
     private async Task NextTrack()
     {
         await Auth.SkipToNextAsync();
-        await Task.Delay(300);
-        await ReloadNowPlaying();
     }
 
     private async Task TogglePlayPause()
@@ -253,7 +262,6 @@
         else
             await Auth.PlayAsync();
 
-        await ReloadNowPlaying();
     }
 
     private void GoToAlbum()
@@ -391,4 +399,6 @@
         var ts = TimeSpan.FromMilliseconds(ms);
         return $"{ts.Minutes}:{ts.Seconds:D2}";
     }
+
+
 }

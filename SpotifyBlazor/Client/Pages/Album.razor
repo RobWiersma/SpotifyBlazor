@@ -1,4 +1,6 @@
 ﻿@page "/album/{AlbumId}"
+@implements IDisposable
+
 @using SpotifyBlazor.Client.Services
 @using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
@@ -38,10 +40,14 @@
 
                     <div class="track-info">
                         <div class="track-title">@trackObj.Name</div>
-                        <div class="track-artist">@string.Join(", ", trackObj.Artists.Select(a => a.Name))</div>
+                        <div class="track-artist">
+                            @string.Join(", ", trackObj.Artists.Select(a => a.Name))
+                        </div>
                     </div>
 
-                    <div class="track-duration">@FormatTime(trackObj.DurationMs)</div>
+                    <div class="track-duration">
+                        @FormatTime(trackObj.DurationMs)
+                    </div>
                 </div>
             }
         </ul>
@@ -49,20 +55,18 @@
 </AnimatedPage>
 
 @code {
-    [Parameter] public string AlbumId { get; set; }
+    [Parameter] public string AlbumId { get; set; } = "";
+
     private SpotifyAlbum? album;
     private SpotifyArtist? artist;
 
+
+    // --- INIT ---
+
     protected override async Task OnInitializedAsync()
     {
-        Auth.LoginStateChanged += async state =>
-        {
-            if (state == LoginState.LoggedIn)
-            {
-                await LoadAlbum();
-                StateHasChanged();
-            }
-        };
+        Auth.LoginStateChanged += HandleLoginStateChanged;
+        Auth.OnPlaybackChanged += HandlePlaybackChangedAsync;
 
         if (Auth.State == LoginState.LoggedIn)
         {
@@ -79,6 +83,40 @@
         }
     }
 
+
+    // --- EVENTS ---
+
+    private async void HandleLoginStateChanged(LoginState state)
+    {
+        if (state == LoginState.LoggedIn)
+        {
+            await LoadAlbum();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandlePlaybackChangedAsync()
+    {
+        // Playback changed elsewhere in the application.
+        //
+        // The album data itself has not changed, so there is no
+        // need to make another Spotify API request here.
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+    // --- DISPOSE ---
+
+    public void Dispose()
+    {
+        Auth.LoginStateChanged -= HandleLoginStateChanged;
+        Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
+    }
+
+
+    // --- LOAD ALBUM ---
+
     private async Task LoadAlbum()
     {
         if (Auth.State != LoginState.LoggedIn)
@@ -88,17 +126,27 @@
         artist = album?.Artists?.FirstOrDefault();
     }
 
+
+    // --- PLAYBACK ---
+
     private async Task Play(SpotifyTrack track)
     {
         if (Auth.State != LoginState.LoggedIn)
             return;
 
         // Determine track index inside album
-        int index = album.Tracks.Items.FindIndex(t => t.Id == track.Id);
-        if (index < 0) index = track.TrackNumber - 1; // fallback
+        int index = album?.Tracks?.Items.FindIndex(t => t.Id == track.Id) ?? -1;
+
+        if (index < 0)
+            index = track.TrackNumber - 1;
+
+        if (index < 0)
+            index = 0;
 
         // Play inside album context
-        await Auth.PlayTrackInContextAsync(album.Uri, index);
+        // SpotifyAuthService will raise OnPlaybackChanged
+        // after the playback request succeeds.
+        await Auth.PlayTrackInContextAsync(album!.Uri, index);
 
         await Telemetry.TrackAsync(
             level: "Info",
@@ -109,6 +157,9 @@
             action: "TrackPlayed"
         );
     }
+
+
+    // --- HELPERS ---
 
     private string FormatTime(int ms)
     {

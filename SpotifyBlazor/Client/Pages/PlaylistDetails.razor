@@ -1,4 +1,6 @@
 ﻿@page "/playlist/{PlaylistId}"
+@implements IDisposable
+
 @using SpotifyBlazor.Client.Services
 @using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
@@ -75,16 +77,76 @@
 </AnimatedPage>
 
 @code {
-    [Parameter] public string PlaylistId { get; set; }
+    [Parameter] public string PlaylistId { get; set; } = "";
 
-    public SpotifyPlaylist Playlist { get; set; }
+    public SpotifyPlaylist? Playlist { get; set; }
     public List<PlaylistTrackItem> Tracks { get; set; } = new();
 
     private HashSet<string> _animatedTracks = new();
     private bool HeaderLoaded = false;
 
+
+    // --- INIT ---
+
     protected override async Task OnInitializedAsync()
     {
+        Auth.LoginStateChanged += HandleLoginStateChanged;
+        Auth.OnPlaybackChanged += HandlePlaybackChangedAsync;
+
+        if (Auth.State == LoginState.LoggedIn)
+        {
+            await LoadPlaylist();
+
+            await Telemetry.TrackAsync(
+                level: "Info",
+                message: $"Playlist loaded: {Playlist?.Name}",
+                context: $"Owner: {Playlist?.Owner?.DisplayName}, Tracks: {Tracks?.Count}",
+                page: "PlaylistDetailsPage",
+                component: "PlaylistHeader",
+                action: "PlaylistLoaded"
+            );
+        }
+    }
+
+
+    // --- EVENTS ---
+
+    private async void HandleLoginStateChanged(LoginState state)
+    {
+        if (state == LoginState.LoggedIn)
+        {
+            await LoadPlaylist();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandlePlaybackChangedAsync()
+    {
+        // Playback changed elsewhere in the application.
+        //
+        // The playlist data itself hasn't changed, so don't
+        // make another Spotify API request here.
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+    // --- DISPOSE ---
+
+    public void Dispose()
+    {
+        Auth.LoginStateChanged -= HandleLoginStateChanged;
+        Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
+    }
+
+
+    // --- LOAD PLAYLIST ---
+
+    private async Task LoadPlaylist()
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
         Playlist = await Auth.GetPlaylistAsync(PlaylistId);
         Tracks = await Auth.GetPlaylistTracksAsync(PlaylistId);
 
@@ -94,39 +156,41 @@
             .Select(t => t.Track?.Id)
             .Where(id => id != null)
             .ToHashSet();
-
-        await Telemetry.TrackAsync(
-            level: "Info",
-            message: $"Playlist loaded: {Playlist?.Name}",
-            context: $"Owner: {Playlist?.Owner?.DisplayName}, Tracks: {Tracks?.Count}",
-            page: "PlaylistDetailsPage",
-            component: "PlaylistHeader",
-            action: "PlaylistLoaded"
-        );
     }
+
+
+    // --- PLAYBACK ---
 
     private async Task PlayTrack(PlaylistTrackItem item)
     {
         var track = item.Track;
-        if (track == null)
+
+        if (track == null || Playlist == null)
             return;
 
         // Determine index inside playlist
         int index = Tracks.FindIndex(t => t.Track?.Id == track.Id);
-        if (index < 0) index = 0;
 
-        // Play inside playlist context
+        if (index < 0)
+            index = 0;
+
+        // Play inside playlist context.
+        // SpotifyAuthService will raise OnPlaybackChanged
+        // after the playback request succeeds.
         await Auth.PlayTrackInContextAsync(Playlist.Uri, index);
 
         await Telemetry.TrackAsync(
             level: "Info",
             message: $"Track played: {track.Name}",
-            context: $"Playlist: {Playlist?.Name}, Artist: {string.Join(", ", track.Artists.Select(a => a.Name))}",
+            context: $"Playlist: {Playlist.Name}, Artist: {string.Join(", ", track.Artists.Select(a => a.Name))}",
             page: "PlaylistDetailsPage",
             component: "TrackList",
             action: "TrackPlayed"
         );
     }
+
+
+    // --- NAVIGATION ---
 
     private async Task OnAlbumClicked(PlaylistTrack track)
     {
@@ -155,6 +219,9 @@
 
         Nav.NavigateTo($"/artist/{artist.Id}");
     }
+
+
+    // --- HELPERS ---
 
     private string FormatDuration(int ms)
     {

@@ -523,7 +523,10 @@ public class SpotifyAuthService
             res.StatusCode);
 
         if (res.IsSuccessStatusCode)
+        {
+            await Task.Delay(250);
             await NotifyPlaybackChangedAsync();
+        }
     }
 
     public async Task SkipToPreviousAsync()
@@ -547,7 +550,10 @@ public class SpotifyAuthService
             res.StatusCode);
 
         if (res.IsSuccessStatusCode)
+        {
+            await Task.Delay(250);
             await NotifyPlaybackChangedAsync();
+        }
     }
 
     public async Task PauseAsync()
@@ -595,30 +601,45 @@ public class SpotifyAuthService
 
     public async Task PlayTrackInContextAsync(string contextUri, int trackIndex)
     {
-        _logger.LogInformation("PlayTrackInContextAsync: Playing from context {ContextUri} at index {TrackIndex}",
-            contextUri, trackIndex);
+        _logger.LogInformation(
+            "PlayTrackInContextAsync: Playing track {TrackIndex} in context {ContextUri}",
+            trackIndex,
+            contextUri);
 
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Put,
+        var body = new
+        {
+            context_uri = contextUri,
+            offset = new
+            {
+                position = trackIndex
+            },
+            position_ms = 0
+        };
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
             "https://api.spotify.com/v1/me/player/play")
         {
-            Content = JsonContent.Create(new
-            {
-                context_uri = contextUri,          // album or playlist URI
-                offset = new { position = trackIndex } // 0‑based index
-            })
+            Content = JsonContent.Create(body)
         };
 
         if (!string.IsNullOrEmpty(AccessToken))
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
 
-        _logger.LogInformation("PlayTrackInContextAsync: Response {StatusCode}", res.StatusCode);
+        _logger.LogInformation(
+            "PlayTrackInContextAsync: Response {StatusCode}",
+            res.StatusCode);
 
         if (res.IsSuccessStatusCode)
+        {
+            await Task.Delay(250);
             await NotifyPlaybackChangedAsync();
+        }
     }
 
     public async Task<SpotifyLikedSongs?> GetLikedSongsAsync(int offset = 0, int limit = 50)

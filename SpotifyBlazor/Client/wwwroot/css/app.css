@@ -45,7 +45,7 @@ h1:focus {
     min-height: 100vh;
 }
 
-.progress-bar{
+.progress-bar {
     background-color: aqua;
 }
 
@@ -88,8 +88,8 @@ h1:focus {
     border-bottom: 1px solid #333;
 }
 
-.loginheader{
-    background:white;
+.loginheader {
+    background: white;
 }
 
 .album-track {
@@ -99,17 +99,17 @@ h1:focus {
     border-bottom: 1px solid #333;
 }
 
-.album-track:hover {
-    background-color: #2a2a2a;
-}
+    .album-track:hover {
+        background-color: #2a2a2a;
+    }
 
 a {
     color: #81b3a1;
 }
 
-a:hover {
-    color: #a8d5c2;
-}
+    a:hover {
+        color: #a8d5c2;
+    }
 
 .nav-link {
     color: #81b3a1;
@@ -247,18 +247,18 @@ a:hover {
     display: flex;
     gap: 12px;
     margin-bottom: 12px;
-    padding-left:12px;
-    padding-right:12px;
+    padding-left: 12px;
+    padding-right: 12px;
 }
 
-.track-item:hover {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
-    background-color: darkgrey;
-    padding-left:12px;
-    padding-right:12px;
-}
+    .track-item:hover {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+        background-color: darkgrey;
+        padding-left: 12px;
+        padding-right: 12px;
+    }
 
 .track-cover {
     width: 60px;
@@ -310,12 +310,12 @@ a:hover {
     cursor: pointer;
 }
 
-.track-row:hover {
-    background-color: darkgrey;
-    padding-left: 12px;
-    padding-right: 12px;
-    gap: 12px;
-}
+    .track-row:hover {
+        background-color: darkgrey;
+        padding-left: 12px;
+        padding-right: 12px;
+        gap: 12px;
+    }
 
 .track-art {
     width: 50px;
@@ -356,7 +356,7 @@ a:hover {
 
 .progress-fill {
     height: 100%;
-    background-color: #1db954; /* Spotify green */
+    background-color: #1db954;
     transition: width 0.2s linear;
 }
 
@@ -435,21 +435,21 @@ a:hover {
     animation: popup 0.12s ease-out;
 }
 
-    .device-menu-item {
-        width: 100%;
-        background: transparent;
-        border: none;
-        color: #fff;
-        text-align: left;
-        padding: 8px 12px;
-        font-size: 0.9rem;
-        cursor: pointer;
-        border-radius: 4px;
-    }
+.device-menu-item {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #fff;
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
 
-        .device-menu-item:hover {
-            background-color: #1db95455;
-        }
+    .device-menu-item:hover {
+        background-color: #1db95455;
+    }
 
 
 @keyframes popup {
@@ -519,12 +519,6 @@ a:hover {
     border: 2px solid #ff4d4d !important;
     opacity: 0.6;
     cursor: not-allowed;
-}
-
-/* Anchor the popup to the button */
-.volume-container {
-    position: relative;
-    display: inline-block;
 }
 
 /* Floating panel */
@@ -734,6 +728,7 @@ a:hover {
     opacity: 1;
     transform: translateX(0);
 }
+
 /* --- Album Art Fade-In --- */
 
 .album-art {
@@ -883,9 +878,9 @@ a:hover {
     opacity: 0.85;
 }
 
-.np-link:hover {
-    opacity: 1;
-}
+    .np-link:hover {
+        opacity: 1;
+    }
 
 
 .lyrics-panel {
@@ -956,51 +951,49 @@ a:hover {
 }
 
 
-    .header-left,
-    .header-right {
-        display: flex;
-        align-items: center;
-    }
+.header-left,
+.header-right {
+    display: flex;
+    align-items: center;
+}
 
-    .header-text {
-        font-size: 0.8rem; /* smaller text */
-        line-height: 1; /* tighter vertical spacing */
-    }
+.header-text {
+    font-size: 0.8rem; /* smaller text */
+    line-height: 1; /* tighter vertical spacing */
+}
 
-    .home-btn {
-        border: 1px solid var(--accent);
-        background: rgba(0,0,0,0.4);
-        color: white;
-        padding: 2px 6px; /* smaller button */
-        border-radius: 4px;
-        font-size: 0.9rem;
-        cursor: pointer;
-    }
+.home-btn {
+    border: 1px solid var(--accent);
+    background: rgba(0,0,0,0.4);
+    color: white;
+    padding: 2px 6px; /* smaller button */
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
 
-    .search-bar {
-        background: rgba(0, 0, 0, 0.25);
-        backdrop-filter: blur(4px);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        color: white;
-    }
+.search-bar {
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
+}
 
-
-
-    .search-box {
-        width: 100%;
-        padding: 8px 12px;
-        /* NEW: subtle, low-attention background */
-        background: rgba(0, 0, 0, 0.25);
-        backdrop-filter: blur(4px);
-        /* NEW: thinner, softer border */
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px;
-        /* Text styling */
-        color: white;
-        font-size: 1rem;
-        /* Make it feel lighter */
-        outline: none;
-    }
+.search-box {
+    width: 100%;
+    padding: 8px 12px;
+    /* NEW: subtle, low-attention background */
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(4px);
+    /* NEW: thinner, softer border */
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    /* Text styling */
+    color: white;
+    font-size: 1rem;
+    /* Make it feel lighter */
+    outline: none;
+}
 
     .search-box::placeholder {
         color: rgba(255, 255, 255, 0.45);
@@ -1158,17 +1151,6 @@ a:hover {
     overflow: hidden;
 }
 
-    .pb-left .track-info {
-        min-width: 0;
-    }
-
-    .pb-left .track-title,
-    .pb-left .track-artist {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
 /* CENTER: true centered block */
 .pb-center {
     flex: 1 1 auto;
@@ -1185,20 +1167,20 @@ a:hover {
     justify-content: flex-end;
     align-items: center;
 }
-    
-    /* --- Responsive --- */
-    @media (max-width: 768px) {
-        .show-header {
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
 
-        .show-cover {
-            width: 140px;
-            height: 140px;
-        }
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .show-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
     }
+
+    .show-cover {
+        width: 140px;
+        height: 140px;
+    }
+}
 
 /* MOBILE FIX — force PlayerBar into a vertical layout */
 @media (max-width: 768px) {

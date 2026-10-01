@@ -599,6 +599,45 @@ public class SpotifyAuthService
         await NotifyPlaybackChangedAsync();
     }
 
+    public async Task PlayTrackAsync(string trackUri)
+    {
+        _logger.LogInformation(
+            "PlayTrackAsync: Playing track {TrackUri}",
+            trackUri);
+
+        await RefreshIfNeededAsync();
+
+        var body = new
+        {
+            uris = new[] { trackUri }
+        };
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Put,
+            "https://api.spotify.com/v1/me/player/play")
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation(
+            "PlayTrackAsync: Response {StatusCode}",
+            res.StatusCode);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Task.Delay(250);
+            await NotifyPlaybackChangedAsync();
+        }
+    }
+
     public async Task PlayTrackInContextAsync(string contextUri, int trackIndex)
     {
         _logger.LogInformation(
@@ -1476,6 +1515,66 @@ public class SpotifyAuthService
                 await callback();
             }
         }
+    }
+
+    public async Task<SpotifyQueueResponse?> GetQueueAsync()
+    {
+        await RefreshIfNeededAsync();
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            "https://api.spotify.com/v1/me/player/queue");
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            _logger.LogWarning(
+                "GetQueueAsync: Response {StatusCode}",
+                res.StatusCode);
+
+            return null;
+        }
+
+        return await res.Content.ReadFromJsonAsync<SpotifyQueueResponse>();
+    }
+
+    public async Task<bool> AddToQueueAsync(string uri)
+    {
+        await RefreshIfNeededAsync();
+
+        var url =
+            $"https://api.spotify.com/v1/me/player/queue?uri={Uri.EscapeDataString(uri)}";
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Post,
+            url);
+
+        if (!string.IsNullOrEmpty(AccessToken))
+        {
+            req.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", AccessToken);
+        }
+
+        var res = await _http.SendAsync(req);
+
+        _logger.LogInformation(
+            "AddToQueueAsync: Response {StatusCode}",
+            res.StatusCode);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await NotifyPlaybackChangedAsync();
+            return true;
+        }
+
+        return false;
     }
 
 }

@@ -940,5 +940,14 @@ public class SpotifyContext
         [JsonPropertyName("images")]
         public List<SpotifyImage>? Images { get; set; }
     }
+
+    public class SpotifyQueueResponse
+    {
+        [JsonPropertyName("currently_playing")]
+        public SpotifyTrack? CurrentlyPlaying { get; set; }
+
+        [JsonPropertyName("queue")]
+        public List<SpotifyTrack> Queue { get; set; } = new();
+    }
 }
 

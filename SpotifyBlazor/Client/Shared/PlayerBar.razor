@@ -89,6 +89,12 @@
 
         <!-- RIGHT SECTION (mirrors left width) -->
         <div class="pb-right d-flex align-items-center gap-3">
+
+            <button class="queue-button d-none d-md-block"
+                    @onclick="ToggleQueue">
+                Queue
+            </button>
+
             <div class="desktop-tools d-none d-md-block">
                 <VolumePopup @ref="VolumePopup" />
             </div>
@@ -97,17 +103,27 @@
                 <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
             </div>
 
-            <button class="mobile-tools-toggle btn btn-dark d-md-none" @onclick="ToggleMobileTools">
+            <button class="mobile-tools-toggle btn btn-dark d-md-none"
+                    @onclick="ToggleMobileTools">
                 ⚙️ Options
             </button>
 
             @if (showMobileTools)
             {
                 <div class="mobile-tools-panel d-md-none">
+
+                    <button class="mobile-option"
+                            @onclick="ToggleQueue">
+                        Queue
+                    </button>
+
                     <VolumePopup @ref="VolumePopup" />
+
                     <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
+
                 </div>
             }
+
         </div>
     }
     else
@@ -117,10 +133,79 @@
 
 </div>
 
+@if (_showQueue)
+{
+    <div class="queue-overlay" @onclick="CloseQueue">
+        <div class="queue-panel" @onclick:stopPropagation>
+
+            <div class="queue-header">
+                <h3>Queue</h3>
+
+                <button class="queue-close"
+                        @onclick="CloseQueue">
+                    ×
+                </button>
+            </div>
+
+            @if (_loadingQueue)
+            {
+                <div class="queue-message">
+                    Loading...
+                </div>
+            }
+            else if (_queue.Count == 0)
+            {
+                <div class="queue-message">
+                    Your queue is empty.
+                </div>
+            }
+            else
+            {
+                <div class="queue-list">
+                    @foreach (var track in _queue)
+                    {
+                        <div class="queue-item"
+                             @onclick="() => PlayQueueTrack(track)">
+
+                            @if (track.Album?.Images?.Count > 0)
+                            {
+                                <img src="@track.Album.Images[0].Url"
+                                     class="queue-art"
+                                     alt="@track.Name" />
+                            }
+
+                            <div class="queue-track-info">
+                                <div class="queue-track-name">
+                                    @track.Name
+                                </div>
+
+                                <div class="queue-track-artist">
+                                    @string.Join(", ",
+                                        track.Artists?.Select(a => a.Name)
+                                        ?? Enumerable.Empty<string>())
+                                </div>
+                            </div>
+
+                            <div class="queue-duration">
+                                @FormatDuration(track.DurationMs)
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+        </div>
+    </div>
+}
+
 
 @code {
     private bool IsEpisode =>
     current?.CurrentlyPlayingType == "episode";
+
+    private bool _showQueue;
+    private bool _loadingQueue;
+    private List<SpotifyTrack> _queue = new();
 
     private string Artwork =>
     current?.Item?.Album?.Images?.FirstOrDefault()?.Url
@@ -163,34 +248,90 @@
         }
     }
 
+    private async Task ToggleQueue()
+    {
+        _showQueue = !_showQueue;
+
+        if (_showQueue)
+        {
+            await LoadQueue();
+        }
+    }
+
+    private void CloseQueue()
+    {
+        _showQueue = false;
+    }
+
+    private async Task LoadQueue()
+    {
+        _loadingQueue = true;
+
+        try
+        {
+            var result = await Auth.GetQueueAsync();
+
+            _queue = result?.Queue ?? new List<SpotifyTrack>();
+        }
+        finally
+        {
+            _loadingQueue = false;
+        }
+    }
+
+    private async Task PlayQueueTrack(SpotifyTrack track)
+    {
+        if (!string.IsNullOrEmpty(track.Uri))
+        {
+            await Auth.PlayTrackAsync(track.Uri);
+        }
+    }
+
+    private static string FormatDuration(int durationMs)
+    {
+        var time = TimeSpan.FromMilliseconds(durationMs);
+
+        return time.TotalHours >= 1
+            ? time.ToString(@"h\:mm\:ss")
+            : time.ToString(@"m\:ss");
+    }
+
     protected override async Task OnInitializedAsync()
     {
         Auth.LoginStateChanged += async state =>
-        {
-            if (state == LoginState.LoggedIn)
-            {
-                await LoadNowPlaying();
-                await UpdateFavoriteState();
-                StartRefreshLoop();
-                StateHasChanged();
-            }
-            else
-            {
-                current = null;
-                StateHasChanged();
-            }
-        };
+{
+    if (state == LoginState.LoggedIn)
+    {
+        await LoadNowPlaying();
+        await UpdateFavoriteState();
+        await LoadQueue();
+
+        StartRefreshLoop();
+
+        await InvokeAsync(StateHasChanged);
+    }
+    else
+    {
+        current = null;
+        _queue.Clear();
+
+        await InvokeAsync(StateHasChanged);
+    }
+};
 
         Auth.OnPlaybackChanged += async () =>
-        {
-            if (Auth.State == LoginState.LoggedIn)
-            {
-                apiRefreshCounter = 0;
-                await LoadNowPlaying();
-                await UpdateFavoriteState();
-                StateHasChanged();
-            }
-        };
+{
+    if (Auth.State == LoginState.LoggedIn)
+    {
+        apiRefreshCounter = 0;
+
+        await LoadNowPlaying();
+        await UpdateFavoriteState();
+        await LoadQueue();
+
+        await InvokeAsync(StateHasChanged);
+    }
+};
 
         if (Auth.State == LoginState.LoggedIn)
         {

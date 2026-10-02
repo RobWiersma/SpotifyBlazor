@@ -35,19 +35,34 @@
         <ul class="list-group">
             @foreach (var trackObj in album.Tracks.Items)
             {
-                <div class="track-row" @onclick="() => Play(trackObj)">
-                    <img src="@album.Images.First().Url" class="track-art" />
+                <div class="track-row"
+                     @onclick="() => Play(trackObj)">
+
+                    <img src="@album.Images.First().Url"
+                         class="track-art" />
 
                     <div class="track-info">
                         <div class="track-title">@trackObj.Name</div>
+
                         <div class="track-artist">
-                            @string.Join(", ", trackObj.Artists.Select(a => a.Name))
+                            @string.Join(", ",
+                                trackObj.Artists.Select(a => a.Name))
                         </div>
                     </div>
 
                     <div class="track-duration">
                         @FormatTime(trackObj.DurationMs)
                     </div>
+
+                    <button class="album-favorite-btn"
+                            @onclick:stopPropagation
+                            @onclick="() => ToggleFavorite(trackObj)"
+                            title="@(_favoriteTracks.Contains(trackObj.Id)
+                                                        ? "Remove from Liked Songs"
+                                                        : "Add to Liked Songs")">
+                        @(_favoriteTracks.Contains(trackObj.Id) ? "💚" : "➕")
+                    </button>
+
                 </div>
             }
         </ul>
@@ -59,6 +74,8 @@
 
     private SpotifyAlbum? album;
     private SpotifyArtist? artist;
+
+    private HashSet<string> _favoriteTracks = new();
 
 
     // --- INIT ---
@@ -97,11 +114,6 @@
 
     private async Task HandlePlaybackChangedAsync()
     {
-        // Playback changed elsewhere in the application.
-        //
-        // The album data itself has not changed, so there is no
-        // need to make another Spotify API request here.
-
         await InvokeAsync(StateHasChanged);
     }
 
@@ -124,6 +136,65 @@
 
         album = await Auth.GetAlbumAsync(AlbumId);
         artist = album?.Artists?.FirstOrDefault();
+
+        await LoadFavoriteStates();
+    }
+
+
+    private async Task LoadFavoriteStates()
+    {
+        _favoriteTracks.Clear();
+
+        if (album?.Tracks?.Items == null)
+            return;
+
+        var tracks = album.Tracks.Items
+            .Where(t => !string.IsNullOrEmpty(t.Id))
+            .ToList();
+
+        if (tracks.Count == 0)
+            return;
+
+        var uris = tracks
+            .Select(t => $"spotify:track:{t.Id}")
+            .ToList();
+
+        var results = await Auth.AreFavoritesAsync(uris);
+
+        for (int i = 0; i < tracks.Count && i < results.Length; i++)
+        {
+            if (results[i])
+                _favoriteTracks.Add(tracks[i].Id);
+        }
+    }
+
+
+    // --- FAVORITES ---
+
+    private async Task ToggleFavorite(SpotifyTrack track)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        if (string.IsNullOrEmpty(track.Id))
+            return;
+
+        string uri = $"spotify:track:{track.Id}";
+
+        bool isFavorite = _favoriteTracks.Contains(track.Id);
+
+        if (isFavorite)
+        {
+            await Auth.RemoveFromLibraryAsync(uri);
+            _favoriteTracks.Remove(track.Id);
+        }
+        else
+        {
+            await Auth.SaveToLibraryAsync(uri);
+            _favoriteTracks.Add(track.Id);
+        }
+
+        StateHasChanged();
     }
 
 
@@ -134,7 +205,6 @@
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        // Determine track index inside album
         int index = album?.Tracks?.Items.FindIndex(t => t.Id == track.Id) ?? -1;
 
         if (index < 0)
@@ -143,9 +213,6 @@
         if (index < 0)
             index = 0;
 
-        // Play inside album context
-        // SpotifyAuthService will raise OnPlaybackChanged
-        // after the playback request succeeds.
         await Auth.PlayTrackInContextAsync(album!.Uri, index);
 
         await Telemetry.TrackAsync(

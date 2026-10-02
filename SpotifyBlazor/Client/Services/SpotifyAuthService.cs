@@ -1436,6 +1436,40 @@ public class SpotifyAuthService
         return result?.FirstOrDefault() ?? false;
     }
 
+    public async Task<bool[]> AreFavoritesAsync(IEnumerable<string> spotifyUris)
+    {
+        await RefreshIfNeededAsync();
+
+        var uris = spotifyUris
+            .Where(uri => !string.IsNullOrEmpty(uri))
+            .ToList();
+
+        if (uris.Count == 0)
+            return Array.Empty<bool>();
+
+        var query = string.Join(
+            ",",
+            uris.Select(Uri.EscapeDataString));
+
+        var url =
+            $"https://api.spotify.com/v1/me/library/contains?uris={query}";
+
+        var req = new HttpRequestMessage(
+            HttpMethod.Get,
+            url);
+
+        req.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        var response = await _http.SendAsync(req);
+
+        if (!response.IsSuccessStatusCode)
+            return Array.Empty<bool>();
+
+        return await response.Content.ReadFromJsonAsync<bool[]>()
+               ?? Array.Empty<bool>();
+    }
+
     public async Task SaveToLibraryAsync(params string[] spotifyUris)
     {
         await RefreshIfNeededAsync();

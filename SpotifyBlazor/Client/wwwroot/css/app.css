@@ -301,6 +301,7 @@ a {
     display: flex;
     align-items: center;
     gap: 12px; /* spacing between album art and text */
+    flex: 1;
 }
 
 .track-row {
@@ -334,12 +335,6 @@ a {
 
 .track-artist {
     opacity: 0.7;
-}
-
-.track-duration {
-    width: 50px;
-    text-align: right;
-    opacity: 0.8;
 }
 
 .playerbar-progress {
@@ -1405,3 +1400,41 @@ a {
         transform: translateX(0);
     }
 }
+
+.album-favorite-btn {
+    margin-left: 12px;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: none;
+    color: #aaa;
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 50%;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+    .album-favorite-btn:hover {
+        background-color: #333;
+        transform: scale(1.1);
+    }
+
+.track-favorite-btn {
+    margin-left: 12px;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: none;
+    color: #aaa;
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 50%;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+    .track-favorite-btn:hover {
+        background-color: #333;
+        transform: scale(1.1);
+    }

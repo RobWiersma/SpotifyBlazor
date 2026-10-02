@@ -70,6 +70,15 @@
                         @FormatDuration(t.Track?.DurationMs ?? 0)
                     </div>
 
+                    <button class="track-favorite-btn"
+                            @onclick:stopPropagation
+                            @onclick="() => ToggleFavorite(t.Track)"
+                            title="@(_favoriteTracks.Contains(t.Track?.Id ?? "")
+                                                        ? "Remove from Liked Songs"
+                                                        : "Add to Liked Songs")">
+                        @(_favoriteTracks.Contains(t.Track?.Id ?? "") ? "💚" : "➕")
+                    </button>
+
                 </li>
             }
         </ul>
@@ -83,6 +92,8 @@
     public List<PlaylistTrackItem> Tracks { get; set; } = new();
 
     private HashSet<string> _animatedTracks = new();
+    private HashSet<string> _favoriteTracks = new();
+
     private bool HeaderLoaded = false;
 
 
@@ -156,6 +167,65 @@
             .Select(t => t.Track?.Id)
             .Where(id => id != null)
             .ToHashSet();
+
+        await LoadFavoriteStates();
+    }
+
+
+    // --- FAVORITE STATES ---
+
+    private async Task LoadFavoriteStates()
+    {
+        _favoriteTracks.Clear();
+
+        var tracks = Tracks
+            .Where(t => t.Track != null && !string.IsNullOrEmpty(t.Track.Id))
+            .Select(t => t.Track!)
+            .ToList();
+
+        if (tracks.Count == 0)
+            return;
+
+        var uris = tracks
+            .Select(t => $"spotify:track:{t.Id}")
+            .ToList();
+
+        var results = await Auth.AreFavoritesAsync(uris);
+
+        for (int i = 0; i < tracks.Count && i < results.Length; i++)
+        {
+            if (results[i])
+                _favoriteTracks.Add(tracks[i].Id);
+        }
+    }
+
+
+    // --- FAVORITES ---
+
+    private async Task ToggleFavorite(PlaylistTrack? track)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        if (track == null || string.IsNullOrEmpty(track.Id))
+            return;
+
+        string uri = $"spotify:track:{track.Id}";
+
+        bool isFavorite = _favoriteTracks.Contains(track.Id);
+
+        if (isFavorite)
+        {
+            await Auth.RemoveFromLibraryAsync(uri);
+            _favoriteTracks.Remove(track.Id);
+        }
+        else
+        {
+            await Auth.SaveToLibraryAsync(uri);
+            _favoriteTracks.Add(track.Id);
+        }
+
+        StateHasChanged();
     }
 
 

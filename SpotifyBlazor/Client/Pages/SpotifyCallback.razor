@@ -8,36 +8,18 @@
 @inject TelemetryService Telemetry
 @inject IJSRuntime JS
 
-<h3>Spotify Callback</h3>
-
-@if (!string.IsNullOrEmpty(Code))
-{
-    <p><strong>Code received:</strong> @Code</p>
-}
+<h3>Logging in to Spotify…</h3>
 
 @code {
     public string? Code { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        // Never log the callback URL or code: the code can be exchanged for tokens
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
-        Console.WriteLine("Callback URL: " + uri);
-
-        // Only log telemetry if logged in (prevents early JWT crash)
-        if (Auth.State == LoginState.LoggedIn)
-        {
-            await Telemetry.TrackAsync("info", "Callback URL received", uri.ToString(), page: "spotcallback");
-        }
 
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         Code = query["code"];
-
-        Console.WriteLine("Extracted Code: " + Code);
-
-        if (Auth.State == LoginState.LoggedIn)
-        {
-            await Telemetry.TrackAsync("info", "Code extracted", Code, page: "spotcallback");
-        }
 
         if (string.IsNullOrEmpty(Code))
         {
@@ -58,7 +40,7 @@
 
         if (Auth.State == LoginState.LoggedIn)
         {
-            await Telemetry.TrackAsync("info", "Exchanging code for Spotify tokens", Code, page: "spotcallback");
+            await Telemetry.TrackAsync("info", "Exchanging code for Spotify tokens", page: "spotcallback");
         }
 
         var tokenResponse = await Http.PostAsJsonAsync("/api/spotify/exchange", new { Code });
@@ -78,9 +60,11 @@
 
         var token = await tokenResponse.Content.ReadFromJsonAsync<TokenResponseFull>();
 
-        Console.WriteLine("Access Token: " + token?.access_token);
-        Console.WriteLine("Refresh Token: " + token?.refresh_token);
-        Console.WriteLine("Scope: " + token?.scope);
+        if (token is null)
+        {
+            Console.WriteLine("Spotify token exchange returned no token.");
+            return;
+        }
 
         if (Auth.State == LoginState.LoggedIn)
         {

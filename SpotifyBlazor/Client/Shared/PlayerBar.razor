@@ -351,9 +351,9 @@
     }
 
     private double ProgressPercent =>
-        current?.Item == null
+        current?.Item == null || current.Item.DurationMs <= 0
             ? 0
-            : (double)current.ProgressMs / current.Item.DurationMs * 100;
+            : Math.Clamp((double)current.ProgressMs / current.Item.DurationMs * 100, 0, 100);
 
     private async Task RefreshLoop()
     {

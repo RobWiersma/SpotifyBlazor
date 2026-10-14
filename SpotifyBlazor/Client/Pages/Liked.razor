@@ -63,6 +63,7 @@
 
     private int _offset = 0;
     private int _limit = 50;
+    private bool _songsFailed;
 
     private HashSet<string> _animatedTracks = new();
 
@@ -138,12 +139,34 @@
         if (Auth.State != LoginState.LoggedIn)
             return;
 
-        LikedSongs = await Auth.GetLikedSongsAsync(_offset, _limit);
+        _songsFailed = false;
+
+        try
+        {
+            LikedSongs = await Auth.GetLikedSongsAsync(_offset, _limit);
+        }
+        catch
+        {
+            LikedSongs = null;
+        }
+
+        if (LikedSongs == null)
+        {
+            _songsFailed = true;
+            _animatedTracks = new();
+            return;
+        }
 
         _animatedTracks = LikedSongs.Items
             .Select(i => i.Track?.Id)
             .Where(id => id != null)
             .ToHashSet();
+    }
+
+    private async Task RetryLikedSongs()
+    {
+        _songsFailed = false;
+        await LoadLikedSongs();
     }
 
 
@@ -152,6 +175,13 @@
         if (Auth.State != LoginState.LoggedIn)
         {
             __builder.AddContent(0, "You must be logged in to view your liked songs.");
+            return;
+        }
+
+        if (LikedSongs == null && _songsFailed)
+        {
+            <p>Couldn't load your liked songs.</p>
+            <button class="btn btn-secondary" @onclick="RetryLikedSongs">Try again</button>
             return;
         }
 

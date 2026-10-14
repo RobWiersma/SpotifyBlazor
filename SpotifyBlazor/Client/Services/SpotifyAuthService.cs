@@ -22,6 +22,8 @@ public class SpotifyAuthService
 
     private const string StorageKey = "spotify_auth";
 
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
     public LoginState State { get; private set; } = LoginState.NotLoggedIn;
     public event Action<LoginState>? LoginStateChanged;
 
@@ -310,8 +312,14 @@ public class SpotifyAuthService
         if (DateTime.UtcNow < ExpiresAt.AddSeconds(-30))
             return true;
 
+        // Only one refresh at a time; concurrent callers wait, then reuse the new token
+        await _refreshLock.WaitAsync();
+
         try
         {
+            if (DateTime.UtcNow < ExpiresAt.AddSeconds(-30))
+                return true;
+
             // ---------------------------------------------------------
             // STEP 1: Refresh Spotify access token
             // ---------------------------------------------------------
@@ -361,6 +369,10 @@ public class SpotifyAuthService
         catch
         {
             return false;
+        }
+        finally
+        {
+            _refreshLock.Release();
         }
     }
 

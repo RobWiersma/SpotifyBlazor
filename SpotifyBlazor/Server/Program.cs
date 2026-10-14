@@ -186,7 +186,8 @@ app.MapPost("/api/spotify/exchange", async (
         new FormUrlEncodedContent(form));
 
     var raw = await response.Content.ReadAsStringAsync();
-    logger.LogWarning("EXCHANGE RAW RESPONSE → {Raw}", raw);
+    // Don't log the body: it contains the access and refresh tokens
+    logger.LogWarning("EXCHANGE RESPONSE → {StatusCode}", (int)response.StatusCode);
 
     if (!response.IsSuccessStatusCode)
         return Results.Problem("Spotify token exchange failed");
@@ -218,7 +219,8 @@ app.MapPost("/api/spotify/refresh", async (
         "https://accounts.spotify.com/api/token",
         new FormUrlEncodedContent(values));
 
-    response.EnsureSuccessStatusCode();
+    if (!response.IsSuccessStatusCode)
+        return Results.Problem("Spotify token refresh failed", statusCode: (int)response.StatusCode);
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
     return Results.Ok(json);

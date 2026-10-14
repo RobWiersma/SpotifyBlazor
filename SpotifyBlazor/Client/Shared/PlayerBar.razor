@@ -239,7 +239,9 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (current != null)
+        // Measure on first render too (even logged out); playerbar.js then
+        // tracks size changes itself so page content never hides behind the bar
+        if (firstRender || current != null)
         {
             if (jsModule == null)
                 jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/playerbar.js");

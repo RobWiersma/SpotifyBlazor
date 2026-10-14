@@ -1,11 +1,4 @@
 <!DOCTYPE html>
-
-
-<script src="_framework/blazor.webassembly.js"></script>
-<script src="loggingInterop.js"></script>
-<script src="devicepicker.js"></script>
-<script src="lyrics.js"></script>
-
 <html lang="en">
 
 <head>
@@ -19,12 +12,18 @@
     <link href="css/SpotifyBlazor.styles.css" rel="stylesheet" />
 </head>
 
-
-
 <body>
     <div id="app">
-
+        <!-- Shown until Blazor finishes downloading and replaces it -->
+        <div class="app-loading">
+            <div class="app-loading-spinner"></div>
+            <div>Loading SpotifyBlazor…</div>
+        </div>
     </div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="loggingInterop.js"></script>
+    <script src="devicepicker.js"></script>
 </body>
 
 </html>

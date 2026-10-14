@@ -8,48 +8,57 @@
 @inject TelemetryService Telemetry
 
 <AnimatedPage>
-    @if (_show == null)
+    @if (Auth.State != LoginState.LoggedIn)
     {
-        <p>Loading podcast…</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to view this podcast.</p>
+        </div>
+    }
+    else if (_show == null)
+    {
+        <p class="page-message">Loading podcast…</p>
     }
     else
     {
-        <div class="show-header d-flex align-items-center mb-4">
+        <div class="media-header">
             <img src="@_show.Images.FirstOrDefault()?.Url"
-                 class="show-cover me-4"
-                 style="width:160px; height:160px; border-radius:8px;" />
+                 class="media-header-cover" alt="" />
 
-            <div>
-                <h2>@_show.Name</h2>
-                <p class="text-muted">@_show.Publisher</p>
-                <p>@_show.Description</p>
+            <div class="media-header-info">
+                <div class="media-header-kicker">Podcast</div>
+                <h1 class="media-header-title">@_show.Name</h1>
+                <p class="media-header-desc">@_show.Description</p>
+                <div class="media-header-meta fw-bold">@_show.Publisher</div>
             </div>
         </div>
 
-        <h4>Episodes</h4>
+        <section class="page-section">
+            <h3 class="section-title">Episodes</h3>
 
-        @if (_episodes == null)
-        {
-            <p>Loading episodes…</p>
-        }
-        else
-        {
-            <ul class="episode-list">
-                @foreach (var ep in _episodes.Items)
-                {
-                    <li class="episode-item mb-3">
-                        <div class="fw-bold">@ep.Name</div>
-                        <div class="text-muted">@ep.ReleaseDate.ToShortDateString()</div>
-                        <div>@ep.Description</div>
+            @if (_episodes == null)
+            {
+                <p class="page-message">Loading episodes…</p>
+            }
+            else
+            {
+                <ul class="episode-list">
+                    @foreach (var ep in _episodes.Items)
+                    {
+                        <li class="episode-card">
+                            <div class="episode-title">@ep.Name</div>
+                            <div class="episode-date">@ep.ReleaseDate.ToShortDateString()</div>
+                            <div class="episode-desc">@ep.Description</div>
 
-                        <button class="btn btn-sm btn-primary mt-2"
-                                @onclick="@(() => PlayEpisode(ep))">
-                            Play Episode
-                        </button>
-                    </li>
-                }
-            </ul>
-        }
+                            <button class="pill-btn primary"
+                                    @onclick="@(() => PlayEpisode(ep))">
+                                ▶ Play episode
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
     }
 </AnimatedPage>
 

@@ -6,30 +6,43 @@
 @inject TelemetryService Telemetry
 
 <AnimatedPage>
-    <h3>Your Playlists</h3>
+    <h2 class="page-title">Your Playlists</h2>
 
     @if (Auth.State != LoginState.LoggedIn)
     {
-        <p class="text-warning">You must be logged in to view your playlists.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to see your playlists.</p>
+        </div>
     }
     else if (Playlistz == null)
     {
-        <p>Loading playlists...</p>
+        <p class="page-message">Loading playlists…</p>
+    }
+    else if (Playlistz.Items.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🎶</div>
+            <p>You don't have any playlists yet.</p>
+        </div>
     }
     else
     {
-        <div class="playlist-grid">
+        <div class="card-grid">
             @foreach (var p in Playlistz.Items)
             {
-                <div class="playlist-card @( _animatedPlaylists.Contains(p.Id) ? "playlist-card-loaded" : "" )"
-                     @onclick="@(() => OnPlaylistClicked(p))">
+                <div class="media-card" @onclick="@(() => OnPlaylistClicked(p))">
+                    @if (p.Images?.FirstOrDefault()?.Url is string cover)
+                    {
+                        <img src="@cover" class="media-card-image" alt="" />
+                    }
+                    else
+                    {
+                        <div class="media-card-image media-card-placeholder">🎶</div>
+                    }
 
-                    <img src="@p.Images?.FirstOrDefault()?.Url"
-                         class="playlist-cover" />
-
-                    <div class="playlist-name">@p.Name</div>
-                    <div class="playlist-owner">@p.Owner.DisplayName</div>
-                    <div class="playlist-count">@p.Items.Total tracks</div>
+                    <div class="media-card-title">@p.Name</div>
+                    <div class="media-card-subtitle">@p.Owner?.DisplayName • @p.Items?.Total tracks</div>
                 </div>
             }
         </div>
@@ -38,9 +51,6 @@
 
 @code {
     public SpotifyPlaylistResponse? Playlistz { get; set; }
-
-    // ⭐ Animation state
-    private HashSet<string> _animatedPlaylists = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -74,12 +84,6 @@
             return;
 
         Playlistz = await Auth.GetUserPlaylistsAsync();
-
-        // ⭐ Mark playlists for animation
-        _animatedPlaylists = Playlistz.Items
-            .Select(p => p.Id)
-            .Where(id => id != null)
-            .ToHashSet();
     }
 
     private async Task OnPlaylistClicked(SpotifyPlaylist p)

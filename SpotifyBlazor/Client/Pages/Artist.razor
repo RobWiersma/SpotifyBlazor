@@ -8,75 +8,74 @@
 <AnimatedPage>
     @if (Auth.State != LoginState.LoggedIn)
     {
-        <p class="text-warning">You must be logged in to view this artist.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to view this artist.</p>
+        </div>
     }
     else if (artist == null)
     {
-        <p>Loading artist...</p>
+        <p class="page-message">Loading artist…</p>
     }
     else
     {
-        <div class="d-flex gap-4 artist-header @(HeaderLoaded ? "artist-header-loaded" : "")">
-
+        <div class="media-header">
             <img src="@artist.Images.FirstOrDefault()?.Url"
-                 style="width:220px; border-radius:8px;" />
+                 class="media-header-cover round" alt="" />
 
-            <div>
-                <h3>@artist.Name</h3>
-                @if (artist.Followers != null)
-                {
-                    <p><strong>Followers:</strong> @artist.Followers.Total</p>
-                }
-
-                @if (artist.Genres != null && artist.Genres.Any())
-                {
-                    <p><strong>Genres:</strong> @string.Join(", ", artist.Genres)</p>
-                }
+            <div class="media-header-info">
+                <div class="media-header-kicker">Artist</div>
+                <h1 class="media-header-title">@artist.Name</h1>
+                <div class="media-header-meta">
+                    @if (artist.Followers != null)
+                    {
+                        <span>@artist.Followers.Total.ToString("N0") followers</span>
+                    }
+                    @if (artist.Genres != null && artist.Genres.Any())
+                    {
+                        <span> • @string.Join(", ", artist.Genres)</span>
+                    }
+                </div>
             </div>
         </div>
 
         @if (albumPage != null && albumPage.Items.Any())
         {
-            <h3 class="mt-4 mb-3">Albums</h3>
+            <section class="page-section">
+                <h3 class="section-title">Albums</h3>
 
-            <div class="album-wrap">
-                @foreach (var album in albumPage.Items)
-                {
-                    <div class="album-item @( _animatedAlbums.Contains(album.Id) ? "album-item-loaded" : "" )"
-                         @onclick="() => OnAlbumClicked(album)">
-                        <img src="@album.Images.FirstOrDefault()?.Url"
-                             alt="@album.Name"
-                             class="album-cover-small" />
+                <div class="card-grid">
+                    @foreach (var album in albumPage.Items)
+                    {
+                        <div class="media-card" @onclick="() => OnAlbumClicked(album)">
+                            <img src="@album.Images.FirstOrDefault()?.Url"
+                                 alt=""
+                                 class="media-card-image" />
+                            <div class="media-card-title">@album.Name</div>
+                            <div class="media-card-subtitle">@album.ReleaseDate</div>
+                        </div>
+                    }
+                </div>
 
-                        <div class="album-title">@album.Name</div>
-                        <div class="album-date">@album.ReleaseDate</div>
-                    </div>
-                }
-            </div>
-
-            <div class="pagination-controls d-flex align-items-center gap-3 mt-3">
-
-                @if (albumPage.Previous != null)
-                {
-                    <button class="btn btn-secondary"
+                <div class="pager">
+                    <button class="pill-btn"
+                            disabled="@(albumPage.Previous == null)"
                             @onclick="LoadPreviousPage">
                         Previous
                     </button>
-                }
 
-                @if (albumPage.Next != null)
-                {
-                    <button class="btn btn-secondary"
+                    <button class="pill-btn"
+                            disabled="@(albumPage.Next == null)"
                             @onclick="LoadNextPage">
                         Next
                     </button>
-                }
 
-                <span>
-                    Page @(albumPage.Offset / albumPage.Limit + 1)
-                    of @((int)Math.Ceiling((double)albumPage.Total / albumPage.Limit))
-                </span>
-            </div>
+                    <span class="pager-text">
+                        Page @(albumPage.Offset / albumPage.Limit + 1)
+                        of @((int)Math.Ceiling((double)albumPage.Total / albumPage.Limit))
+                    </span>
+                </div>
+            </section>
         }
     }
 </AnimatedPage>
@@ -86,10 +85,6 @@
 
     private SpotifyArtistFull? artist;
     private SpotifyPaging<SpotifyAlbum>? albumPage;
-
-    // ⭐ Animation state
-    private bool HeaderLoaded = false;
-    private HashSet<string> _animatedAlbums = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -124,13 +119,6 @@
 
         artist = await Auth.GetArtistAsync(ArtistId);
         albumPage = await Auth.GetArtistAlbumsPage(ArtistId, 0, 10);
-
-        // Mark header + albums for animation
-        HeaderLoaded = true;
-        _animatedAlbums = albumPage.Items
-            .Select(a => a.Id)
-            .Where(id => id != null)
-            .ToHashSet();
     }
 
     private async Task OnAlbumClicked(SpotifyAlbum album)
@@ -153,11 +141,6 @@
         {
             albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Next);
 
-            _animatedAlbums = albumPage.Items
-                .Select(a => a.Id)
-                .Where(id => id != null)
-                .ToHashSet();
-
             await Telemetry.TrackAsync(
                 level: "Info",
                 message: $"Artist album page: Next",
@@ -174,11 +157,6 @@
         if (albumPage?.Previous != null)
         {
             albumPage = await Auth.GetArtistAlbumsByUrl(albumPage.Previous);
-
-            _animatedAlbums = albumPage.Items
-                .Select(a => a.Id)
-                .Where(id => id != null)
-                .ToHashSet();
 
             await Telemetry.TrackAsync(
                 level: "Info",

@@ -10,62 +10,67 @@
 <AnimatedPage>
     @if (Auth.State != LoginState.LoggedIn)
     {
-        <p class="text-warning">You must be logged in to view this album.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to view this album.</p>
+        </div>
     }
     else if (album == null)
     {
-        <p>Loading...</p>
+        <p class="page-message">Loading album…</p>
     }
     else
     {
-        <div class="d-flex gap-4">
-
+        <div class="media-header">
             <img src="@album.Images.FirstOrDefault()?.Url"
-                 style="width:200px; border-radius:8px;" />
+                 class="media-header-cover" alt="" />
 
-            <div>
-                <h3>@album.Name</h3>
-                <p>@string.Join(", ", album.Artists.Select(a => a.Name))</p>
-                <p>Released: @album.ReleaseDate</p>
+            <div class="media-header-info">
+                <div class="media-header-kicker">Album</div>
+                <h1 class="media-header-title">@album.Name</h1>
+                <div class="media-header-meta">
+                    @foreach (var a in album.Artists)
+                    {
+                        <span class="text-link fw-bold"
+                              @onclick="@(() => Navigation.NavigateTo($"/artist/{a.Id}"))">@a.Name</span>
+                        @if (a != album.Artists.Last())
+                        {
+                            <span>, </span>
+                        }
+                    }
+                    • @album.ReleaseDate • @album.Tracks.Items.Count songs
+                </div>
             </div>
         </div>
 
-        <h4 class="mt-4">Tracks</h4>
-
-        <ul class="list-group">
+        <div class="track-list">
             @foreach (var trackObj in album.Tracks.Items)
             {
-                <div class="track-row"
-                     @onclick="() => Play(trackObj)">
+                <div class="track-row" @onclick="() => Play(trackObj)">
 
-                    <img src="@album.Images.First().Url"
-                         class="track-art" />
+                    <div class="track-row-num">
+                        <span class="track-row-num-text">@trackObj.TrackNumber</span>
+                        <span class="track-row-num-play">▶</span>
+                    </div>
 
-                    <div class="track-info">
-                        <div class="track-title">@trackObj.Name</div>
-
-                        <div class="track-artist">
-                            @string.Join(", ",
-                                trackObj.Artists.Select(a => a.Name))
+                    <div class="track-row-info">
+                        <div class="track-row-name">@trackObj.Name</div>
+                        <div class="track-row-sub">
+                            @string.Join(", ", trackObj.Artists.Select(a => a.Name))
                         </div>
                     </div>
 
-                    <div class="track-duration">
-                        @FormatTime(trackObj.DurationMs)
-                    </div>
-
-                    <button class="album-favorite-btn"
-                            @onclick:stopPropagation
+                    <button class="like-btn"
+                            @onclick:stopPropagation="true"
                             @onclick="() => ToggleFavorite(trackObj)"
-                            title="@(_favoriteTracks.Contains(trackObj.Id)
-                                                        ? "Remove from Liked Songs"
-                                                        : "Add to Liked Songs")">
+                            title="@(_favoriteTracks.Contains(trackObj.Id) ? "Remove from Liked Songs" : "Add to Liked Songs")">
                         @(_favoriteTracks.Contains(trackObj.Id) ? "💚" : "➕")
                     </button>
 
+                    <div class="track-row-meta">@FormatTime(trackObj.DurationMs)</div>
                 </div>
             }
-        </ul>
+        </div>
     }
 </AnimatedPage>
 

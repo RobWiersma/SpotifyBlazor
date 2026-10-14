@@ -9,48 +9,52 @@
 
 <AnimatedPage>
 
-    <h2 class="mb-3">Liked</h2>
+    <h2 class="page-title">Liked</h2>
 
-    <!-- Tabs -->
-    <ul class="nav nav-pills mb-4 liked-tabs">
-        <li class="nav-item">
-            <button class="nav-link @( _activeTab == "songs" ? "active" : "" )"
+    @if (Auth.State != LoginState.LoggedIn)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to see your liked songs, albums and podcasts.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Tabs -->
+        <div class="chips">
+            <button class="chip @( _activeTab == "songs" ? "active" : "" )"
                     @onclick=@(() => SwitchTab("songs"))>
                 Songs
             </button>
-        </li>
 
-        <li class="nav-item">
-            <button class="nav-link @( _activeTab == "albums" ? "active" : "" )"
+            <button class="chip @( _activeTab == "albums" ? "active" : "" )"
                     @onclick=@(() => SwitchTab("albums"))>
                 Albums
             </button>
-        </li>
 
-        <li class="nav-item">
-            <button class="nav-link @( _activeTab == "shows" ? "active" : "" )"
+            <button class="chip @( _activeTab == "shows" ? "active" : "" )"
                     @onclick=@(() => SwitchTab("shows"))>
                 Podcasts
             </button>
-        </li>
-    </ul>
+        </div>
 
-    <!-- SONGS TAB -->
-    @if (_activeTab == "songs")
-    {
-        @RenderSongs()
-    }
+        <!-- SONGS TAB -->
+        @if (_activeTab == "songs")
+        {
+            @RenderSongs()
+        }
 
-    <!-- ALBUMS TAB -->
-    @if (_activeTab == "albums")
-    {
-        @RenderAlbums()
-    }
+        <!-- ALBUMS TAB -->
+        @if (_activeTab == "albums")
+        {
+            @RenderAlbums()
+        }
 
-    <!-- PODCASTS TAB -->
-    @if (_activeTab == "shows")
-    {
-        @RenderShows()
+        <!-- PODCASTS TAB -->
+        @if (_activeTab == "shows")
+        {
+            @RenderShows()
+        }
     }
 
 </AnimatedPage>
@@ -64,8 +68,6 @@
     private int _offset = 0;
     private int _limit = 50;
     private bool _songsFailed;
-
-    private HashSet<string> _animatedTracks = new();
 
     private string _activeTab = "songs";
 
@@ -151,16 +153,7 @@
         }
 
         if (LikedSongs == null)
-        {
             _songsFailed = true;
-            _animatedTracks = new();
-            return;
-        }
-
-        _animatedTracks = LikedSongs.Items
-            .Select(i => i.Track?.Id)
-            .Where(id => id != null)
-            .ToHashSet();
     }
 
     private async Task RetryLikedSongs()
@@ -172,89 +165,86 @@
 
     private RenderFragment RenderSongs() => __builder =>
     {
-        if (Auth.State != LoginState.LoggedIn)
-        {
-            __builder.AddContent(0, "You must be logged in to view your liked songs.");
-            return;
-        }
-
         if (LikedSongs == null && _songsFailed)
         {
-            <p>Couldn't load your liked songs.</p>
-            <button class="btn btn-secondary" @onclick="RetryLikedSongs">Try again</button>
+            <div class="empty-state">
+                <p>Couldn't load your liked songs.</p>
+                <button class="pill-btn" @onclick="RetryLikedSongs">Try again</button>
+            </div>
             return;
         }
 
         if (LikedSongs == null)
         {
-            __builder.AddContent(1, "Loading your liked songs…");
+            <p class="page-message">Loading your liked songs…</p>
             return;
         }
 
         if (LikedSongs.Items.Count == 0)
         {
-            __builder.AddContent(2, "You have no liked songs.");
+            <div class="empty-state">
+                <div class="empty-state-icon">💚</div>
+                <p>You have no liked songs yet.</p>
+            </div>
             return;
         }
 
-        <ul class="track-list">
-            @foreach (var t in LikedSongs.Items)
+        <div class="track-list">
+            @foreach (var t in LikedSongs.Items.Where(i => i.Track != null))
             {
-                <li class="track-item @( _animatedTracks.Contains(t.Track?.Id) ? "track-item-loaded" : "" )">
+                <div class="track-row" @onclick="@(() => PlayTrack(t.Track))">
 
-                    <div class="track-left">
-                        <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                             class="track-cover"
-                             style="cursor:pointer"
-                             @onclick="@(() => OnAlbumClicked(t.Track))" />
+                    <div class="track-row-art">
+                        <img src="@(t.Track.Album?.Images?.FirstOrDefault()?.Url ?? "")" alt="" />
+                        <span class="track-row-play">▶</span>
+                    </div>
 
-                        <div class="track-info">
-
-                            <div class="track-name"
-                                 style="cursor:pointer"
-                                 @onclick="@(() => PlayTrack(t.Track))">
-                                @t.Track?.Name
-                            </div>
-
-                            <div class="track-artist">
-                                @foreach (var artist in t.Track?.Artists ?? new List<SpotifyArtist>())
+                    <div class="track-row-info">
+                        <div class="track-row-name">@t.Track.Name</div>
+                        <div class="track-row-sub">
+                            @foreach (var artist in t.Track.Artists ?? new List<SpotifyArtist>())
+                            {
+                                <span class="text-link"
+                                      @onclick:stopPropagation="true"
+                                      @onclick="@(() => OnArtistClicked(artist))">@artist.Name</span>
+                                @if (artist != t.Track.Artists!.Last())
                                 {
-                                    <span class="artist-link"
-                                          style="cursor:pointer; text-decoration:underline;"
-                                          @onclick="@(() => OnArtistClicked(artist))">
-                                        @artist.Name
-                                    </span>
-
-                                    @if (artist != t.Track.Artists.Last())
-                                    {
-                                        <span>, </span>
-                                    }
+                                    <span>, </span>
                                 }
-                            </div>
-
+                            }
                         </div>
                     </div>
 
-                    <div class="track-duration">
-                        @FormatDuration(t.Track?.DurationMs ?? 0)
-                    </div>
+                    @if (t.Track.Album != null)
+                    {
+                        <div class="track-row-album">
+                            <span class="text-link"
+                                  @onclick:stopPropagation="true"
+                                  @onclick="@(() => OnAlbumClicked(t.Track))">@t.Track.Album.Name</span>
+                        </div>
+                    }
 
-                </li>
+                    <div class="track-row-meta">@FormatDuration(t.Track.DurationMs)</div>
+                </div>
             }
-        </ul>
+        </div>
 
-        <div class="d-flex gap-3 mt-4">
-            <button class="btn btn-secondary"
+        <div class="pager">
+            <button class="pill-btn"
                     disabled="@(_offset == 0)"
                     @onclick="PrevPage">
                 Previous
             </button>
 
-            <button class="btn btn-secondary"
+            <button class="pill-btn"
                     disabled="@(_offset + _limit >= LikedSongs.Total)"
                     @onclick="NextPage">
                 Next
             </button>
+
+            <span class="pager-text">
+                Page @(_offset / _limit + 1) of @(Math.Max(1, (int)Math.Ceiling(LikedSongs.Total / (double)_limit)))
+            </span>
         </div>
     };
 
@@ -265,32 +255,29 @@
     {
         if (SavedAlbums == null)
         {
-            __builder.AddContent(0, "Loading albums…");
+            <p class="page-message">Loading albums…</p>
             return;
         }
 
         if (SavedAlbums.Items.Count == 0)
         {
-            __builder.AddContent(1, "You have no saved albums.");
+            <div class="empty-state">
+                <div class="empty-state-icon">💿</div>
+                <p>You have no saved albums yet.</p>
+            </div>
             return;
         }
 
-        foreach (var a in SavedAlbums.Items)
-        {
-            <div class="album-row mb-3 d-flex align-items-center"
-                 style="cursor:pointer"
-                 @onclick="@(() => Nav.NavigateTo($"/album/{a.Album.Id}"))">
-
-                <img src="@a.Album.Images.FirstOrDefault()?.Url"
-                     class="album-cover me-3"
-                     style="width:64px; height:64px; border-radius:4px;" />
-
-                <div>
-                    <div class="fw-bold">@a.Album.Name</div>
-                    <div>@a.Album.Artists.First().Name</div>
+        <div class="card-grid">
+            @foreach (var a in SavedAlbums.Items)
+            {
+                <div class="media-card" @onclick="@(() => Nav.NavigateTo($"/album/{a.Album.Id}"))">
+                    <img src="@a.Album.Images.FirstOrDefault()?.Url" class="media-card-image" alt="" />
+                    <div class="media-card-title">@a.Album.Name</div>
+                    <div class="media-card-subtitle">@a.Album.Artists.FirstOrDefault()?.Name</div>
                 </div>
-            </div>
-        }
+            }
+        </div>
     };
 
 
@@ -300,32 +287,29 @@
     {
         if (SavedShows == null)
         {
-            __builder.AddContent(0, "Loading podcasts…");
+            <p class="page-message">Loading podcasts…</p>
             return;
         }
 
         if (SavedShows.Items.Count == 0)
         {
-            __builder.AddContent(1, "You have no saved podcasts.");
+            <div class="empty-state">
+                <div class="empty-state-icon">🎙️</div>
+                <p>You have no saved podcasts yet.</p>
+            </div>
             return;
         }
 
-        foreach (var s in SavedShows.Items)
-        {
-            <div class="show-row mb-3 d-flex align-items-center"
-                 style="cursor:pointer"
-                 @onclick="@(() => Nav.NavigateTo($"/show/{s.Show.Id}"))">
-
-                <img src="@s.Show.Images.FirstOrDefault()?.Url"
-                     class="show-cover me-3"
-                     style="width:64px; height:64px; border-radius:4px;" />
-
-                <div>
-                    <div class="fw-bold">@s.Show.Name</div>
-                    <div>@s.Show.Publisher</div>
+        <div class="card-grid">
+            @foreach (var s in SavedShows.Items)
+            {
+                <div class="media-card" @onclick="@(() => Nav.NavigateTo($"/show/{s.Show.Id}"))">
+                    <img src="@s.Show.Images.FirstOrDefault()?.Url" class="media-card-image" alt="" />
+                    <div class="media-card-title">@s.Show.Name</div>
+                    <div class="media-card-subtitle">@s.Show.Publisher</div>
                 </div>
-            </div>
-        }
+            }
+        </div>
     };
 
 

@@ -12,26 +12,26 @@
 
         @if (Auth.State != LoginState.LoggedIn)
         {
-            <div class="search-empty">
-                <div class="search-empty-icon">🔒</div>
+            <div class="empty-state">
+                <div class="empty-state-icon">🔒</div>
                 <p>Log in with Spotify to search.</p>
             </div>
         }
         else if (string.IsNullOrWhiteSpace(Q))
         {
-            <div class="search-empty">
-                <div class="search-empty-icon">🔎</div>
+            <div class="empty-state">
+                <div class="empty-state-icon">🔎</div>
                 <p>Search for songs, artists, or albums.</p>
             </div>
         }
         else
         {
-            <h2 class="search-heading">Results for <span>“@Q”</span></h2>
+            <h2 class="page-title">Results for <span>“@Q”</span></h2>
 
-            <div class="search-chips">
+            <div class="chips">
                 @foreach (var (key, label) in Filters)
                 {
-                    <button class="search-chip @(_filter == key ? "active" : "")"
+                    <button class="chip @(_filter == key ? "active" : "")"
                             @onclick="() => SetFilter(key)">
                         @label
                     </button>
@@ -43,21 +43,21 @@
                 <div class="search-skeleton">
                     @for (int i = 0; i < 5; i++)
                     {
-                        <div class="search-skeleton-row"></div>
+                        <div class="skeleton-row"></div>
                     }
                 </div>
             }
             else if (_failed)
             {
-                <div class="search-empty">
+                <div class="empty-state">
                     <p>Search failed.</p>
-                    <button class="btn btn-secondary" @onclick="RunSearch">Try again</button>
+                    <button class="pill-btn" @onclick="RunSearch">Try again</button>
                 </div>
             }
             else if (_results.Count == 0)
             {
-                <div class="search-empty">
-                    <div class="search-empty-icon">🎧</div>
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎧</div>
                     <p>No results for “@Q”. Check the spelling or try something else.</p>
                 </div>
             }
@@ -201,8 +201,8 @@
 
             @if (top != null)
             {
-                <section class="search-section search-top">
-                    <h3 class="search-section-title">Top result</h3>
+                <section class="page-section search-top">
+                    <h3 class="section-title">Top result</h3>
 
                     <div class="search-top-card" @onclick="() => Open(top)">
                         <img src="@top.ImageUrl"
@@ -232,10 +232,10 @@
 
             @if (Tracks.Any())
             {
-                <section class="search-section search-songs-preview">
-                    <div class="search-section-header">
-                        <h3 class="search-section-title">Songs</h3>
-                        <button class="search-see-all" @onclick='() => SetFilter("track")'>Show all</button>
+                <section class="page-section search-songs-preview">
+                    <div class="section-header">
+                        <h3 class="section-title">Songs</h3>
+                        <button class="see-all" @onclick='() => SetFilter("track")'>Show all</button>
                     </div>
                     @RenderSongs(Tracks.Take(4), showAlbum: false)
                 </section>
@@ -244,10 +244,10 @@
 
         @if (Artists.Any())
         {
-            <section class="search-section">
-                <div class="search-section-header">
-                    <h3 class="search-section-title">Artists</h3>
-                    <button class="search-see-all" @onclick='() => SetFilter("artist")'>Show all</button>
+            <section class="page-section">
+                <div class="section-header">
+                    <h3 class="section-title">Artists</h3>
+                    <button class="see-all" @onclick='() => SetFilter("artist")'>Show all</button>
                 </div>
                 @RenderArtists(Artists.Take(6))
             </section>
@@ -255,10 +255,10 @@
 
         @if (Albums.Any())
         {
-            <section class="search-section">
-                <div class="search-section-header">
-                    <h3 class="search-section-title">Albums</h3>
-                    <button class="search-see-all" @onclick='() => SetFilter("album")'>Show all</button>
+            <section class="page-section">
+                <div class="section-header">
+                    <h3 class="section-title">Albums</h3>
+                    <button class="see-all" @onclick='() => SetFilter("album")'>Show all</button>
                 </div>
                 @RenderAlbums(Albums.Take(6))
             </section>
@@ -267,22 +267,22 @@
 
     private RenderFragment RenderSongs(IEnumerable<SearchResult> tracks, bool showAlbum) => __builder =>
     {
-        <div class="search-song-list">
+        <div class="track-list">
             @foreach (var t in tracks)
             {
-                <div class="search-song" @onclick="() => Play(t)">
+                <div class="track-row" @onclick="() => Play(t)">
 
-                    <div class="search-song-art">
+                    <div class="track-row-art">
                         <img src="@t.ImageUrl" alt="" />
-                        <span class="search-song-play">▶</span>
+                        <span class="track-row-play">▶</span>
                     </div>
 
-                    <div class="search-song-info">
-                        <div class="search-song-name">@t.Name</div>
-                        <div class="search-song-artists">
+                    <div class="track-row-info">
+                        <div class="track-row-name">@t.Name</div>
+                        <div class="track-row-sub">
                             @foreach (var artist in t.Artists)
                             {
-                                <span class="search-link"
+                                <span class="text-link"
                                       @onclick:stopPropagation="true"
                                       @onclick="() => GoToArtist(artist.Id)">@artist.Name</span>
                                 @if (artist != t.Artists.Last())
@@ -295,14 +295,14 @@
 
                     @if (showAlbum && !string.IsNullOrEmpty(t.AlbumName))
                     {
-                        <div class="search-song-album">
-                            <span class="search-link"
+                        <div class="track-row-album">
+                            <span class="text-link"
                                   @onclick:stopPropagation="true"
                                   @onclick="() => GoToAlbum(t.AlbumId)">@t.AlbumName</span>
                         </div>
                     }
 
-                    <div class="search-song-duration">@FormatDuration(t.DurationMs)</div>
+                    <div class="track-row-meta">@FormatDuration(t.DurationMs)</div>
                 </div>
             }
         </div>
@@ -310,20 +310,20 @@
 
     private RenderFragment RenderArtists(IEnumerable<SearchResult> artists) => __builder =>
     {
-        <div class="search-grid">
+        <div class="card-grid">
             @foreach (var a in artists)
             {
-                <div class="search-card" @onclick="() => Open(a)">
+                <div class="media-card" @onclick="() => Open(a)">
                     @if (string.IsNullOrEmpty(a.ImageUrl))
                     {
-                        <div class="search-card-image round search-card-placeholder">🎤</div>
+                        <div class="media-card-image round media-card-placeholder">🎤</div>
                     }
                     else
                     {
-                        <img src="@a.ImageUrl" class="search-card-image round" alt="" />
+                        <img src="@a.ImageUrl" class="media-card-image round" alt="" />
                     }
-                    <div class="search-card-title">@a.Name</div>
-                    <div class="search-card-subtitle">Artist</div>
+                    <div class="media-card-title">@a.Name</div>
+                    <div class="media-card-subtitle">Artist</div>
                 </div>
             }
         </div>
@@ -331,20 +331,20 @@
 
     private RenderFragment RenderAlbums(IEnumerable<SearchResult> albums) => __builder =>
     {
-        <div class="search-grid">
+        <div class="card-grid">
             @foreach (var a in albums)
             {
-                <div class="search-card" @onclick="() => Open(a)">
+                <div class="media-card" @onclick="() => Open(a)">
                     @if (string.IsNullOrEmpty(a.ImageUrl))
                     {
-                        <div class="search-card-image search-card-placeholder">💿</div>
+                        <div class="media-card-image media-card-placeholder">💿</div>
                     }
                     else
                     {
-                        <img src="@a.ImageUrl" class="search-card-image" alt="" />
+                        <img src="@a.ImageUrl" class="media-card-image" alt="" />
                     }
-                    <div class="search-card-title">@a.Name</div>
-                    <div class="search-card-subtitle">
+                    <div class="media-card-title">@a.Name</div>
+                    <div class="media-card-subtitle">
                         @(a.ReleaseYear != null ? $"{a.ReleaseYear} · " : "")@string.Join(", ", a.Artists.Select(x => x.Name))
                     </div>
                 </div>

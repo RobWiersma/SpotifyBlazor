@@ -9,84 +9,86 @@
 @inject IJSRuntime JS
 
 <AnimatedPage>
-    <h2 class="mb-3">Recently Played</h2>
+
+    <h2 class="page-title">Recently Played</h2>
 
     @if (Auth.State != LoginState.LoggedIn)
     {
-        <p class="text-warning">You must be logged in to view your recently played tracks.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to see your recently played tracks.</p>
+        </div>
     }
     else if (_history == null)
     {
-        <p>Loading your recently played tracks…</p>
+        <p class="page-message">Loading your recently played tracks…</p>
     }
     else if (_history.Items.Count == 0)
     {
-        <p>No recently played tracks found.</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🕒</div>
+            <p>No recently played tracks found.</p>
+        </div>
     }
     else
     {
-        <ul class="track-list">
-            @foreach (var item in PagedItems)
+        <div class="track-list">
+            @foreach (var item in PagedItems.Where(i => i.Track != null))
             {
-                <li class="track-item @( _animatedTracks.Contains(item.Track?.Id) ? "track-item-loaded" : "" )">
+                <div class="track-row" @onclick="@(() => PlayTrack(item.Track))">
 
-                    <div class="track-left">
-                        <img src="@(item.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                             class="track-cover"
-                             style="cursor:pointer"
-                             @onclick="@(() => OnAlbumClicked(item.Track))" />
+                    <div class="track-row-art">
+                        <img src="@(item.Track.Album?.Images?.FirstOrDefault()?.Url ?? "")" alt="" />
+                        <span class="track-row-play">▶</span>
+                    </div>
 
-                        <div class="track-info">
-
-                            <div class="track-name"
-                                 style="cursor:pointer"
-                                 @onclick="@(() => PlayTrack(item.Track))">
-                                @item.Track?.Name
-                            </div>
-
-                            <div class="track-artist">
-                                @foreach (var artist in item.Track?.Artists ?? new List<SpotifyArtist>())
+                    <div class="track-row-info">
+                        <div class="track-row-name">@item.Track.Name</div>
+                        <div class="track-row-sub">
+                            @foreach (var artist in item.Track.Artists ?? new List<SpotifyArtist>())
+                            {
+                                <span class="text-link"
+                                      @onclick:stopPropagation="true"
+                                      @onclick="@(() => OnArtistClicked(artist))">@artist.Name</span>
+                                @if (artist != item.Track.Artists!.Last())
                                 {
-                                    <span class="artist-link"
-                                          style="cursor:pointer; text-decoration:underline;"
-                                          @onclick="@(() => OnArtistClicked(artist))">
-                                        @artist.Name
-                                    </span>
-
-                                    @if (artist != item.Track.Artists.Last())
-                                    {
-                                        <span>, </span>
-                                    }
+                                    <span>, </span>
                                 }
-                            </div>
-
+                            }
                         </div>
                     </div>
 
-                    <div class="track-duration">
-                        @item.PlayedAt.ToLocalTime().ToString("g")
-                    </div>
+                    @if (item.Track.Album != null)
+                    {
+                        <div class="track-row-album">
+                            <span class="text-link"
+                                  @onclick:stopPropagation="true"
+                                  @onclick="@(() => OnAlbumClicked(item.Track))">@item.Track.Album.Name</span>
+                        </div>
+                    }
 
-                </li>
+                    <div class="track-row-meta wide">@item.PlayedAt.ToLocalTime().ToString("g")</div>
+                </div>
             }
-        </ul>
+        </div>
 
-        <div class="d-flex gap-3 mt-4 justify-content-start">
-
-            <button class="btn btn-secondary"
+        <div class="pager">
+            <button class="pill-btn"
                     disabled="@(CurrentPage == 0)"
                     @onclick="PrevPage">
                 Previous
             </button>
 
-            <button class="btn btn-secondary"
+            <button class="pill-btn"
                     disabled="@(CurrentPage >= TotalPages - 1)"
                     @onclick="NextPage">
                 Next
             </button>
 
+            <span class="pager-text">Page @(CurrentPage + 1) of @(Math.Max(1, TotalPages))</span>
         </div>
     }
+
 </AnimatedPage>
 
 @code {
@@ -106,10 +108,6 @@
             .Skip(CurrentPage * PageSize)
             .Take(PageSize)
             ?? Enumerable.Empty<PlayHistoryItem>();
-
-
-    // --- ANIMATION ---
-    private HashSet<string> _animatedTracks = new();
 
 
     // --- INIT ---
@@ -182,9 +180,6 @@
         if (CurrentPage < TotalPages - 1)
         {
             CurrentPage++;
-
-            MarkPageForAnimation();
-
             await ScrollToTop();
         }
     }
@@ -194,21 +189,9 @@
         if (CurrentPage > 0)
         {
             CurrentPage--;
-
-            MarkPageForAnimation();
-
             await ScrollToTop();
         }
     }
-
-    private void MarkPageForAnimation()
-    {
-        _animatedTracks = PagedItems
-            .Select(i => i.Track?.Id)
-            .Where(id => id != null)
-            .ToHashSet();
-    }
-
 
     // --- LOAD HISTORY ---
 
@@ -229,8 +212,6 @@
             component: "HistoryList",
             actionName: "LoadRecentlyPlayed"
         );
-
-        MarkPageForAnimation();
     }
 
 

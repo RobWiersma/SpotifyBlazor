@@ -8,81 +8,83 @@
 @inject TelemetryService Telemetry
 
 <AnimatedPage>
-    <h3>Playlist Details</h3>
 
-    @if (Playlist == null)
+    @if (Auth.State != LoginState.LoggedIn)
     {
-        <p>Loading playlist...</p>
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Log in with Spotify to view this playlist.</p>
+        </div>
+    }
+    else if (Playlist == null)
+    {
+        <p class="page-message">Loading playlist…</p>
     }
     else
     {
-        <div class="playlist-details-header @(HeaderLoaded ? "playlist-details-header-loaded" : "")">
+        <div class="media-header">
             <img src="@Playlist.Images?.FirstOrDefault()?.Url"
-                 class="playlist-details-cover" />
+                 class="media-header-cover" alt="" />
 
-            <div class="playlist-details-info">
-                <h2>@Playlist.Name</h2>
-                <p>@Playlist.Description</p>
-                <p><strong>Owner:</strong> @Playlist.Owner.DisplayName</p>
-                <p><strong>Total Tracks:</strong> @Tracks.Count</p>
+            <div class="media-header-info">
+                <div class="media-header-kicker">Playlist</div>
+                <h1 class="media-header-title">@Playlist.Name</h1>
+                @if (!string.IsNullOrWhiteSpace(Playlist.Description))
+                {
+                    <p class="media-header-desc">@Playlist.Description</p>
+                }
+                <div class="media-header-meta">@Playlist.Owner?.DisplayName • @Tracks.Count songs</div>
             </div>
         </div>
 
-        <h3>Tracks</h3>
-
-        <ul class="track-list">
-            @foreach (var t in Tracks)
+        <div class="track-list">
+            @foreach (var t in Tracks.Where(i => i.Track != null))
             {
-                <li class="track-item @( _animatedTracks.Contains(t.Track?.Id) ? "track-item-loaded" : "" )">
+                <div class="track-row" @onclick="@(() => PlayTrack(t))">
 
-                    <div class="track-left">
-                        <img src="@(t.Track?.Album?.Images?.FirstOrDefault()?.Url ?? "")"
-                             class="track-cover"
-                             style="cursor:pointer"
-                             @onclick="@(() => OnAlbumClicked(t.Track))" />
+                    <div class="track-row-art">
+                        <img src="@(t.Track!.Album?.Images?.FirstOrDefault()?.Url ?? "")" alt="" />
+                        <span class="track-row-play">▶</span>
+                    </div>
 
-                        <div class="track-info">
-                            <div class="track-name"
-                                 style="cursor:pointer"
-                                 @onclick="@(() => PlayTrack(t))">
-                                @t.Track?.Name
-                            </div>
-
-                            <div class="track-artist">
-                                @foreach (var artist in t.Track?.Artists ?? new List<SimpleArtist>())
+                    <div class="track-row-info">
+                        <div class="track-row-name">@t.Track.Name</div>
+                        <div class="track-row-sub">
+                            @foreach (var artist in t.Track.Artists ?? new List<SimpleArtist>())
+                            {
+                                <span class="text-link"
+                                      @onclick:stopPropagation="true"
+                                      @onclick="@(() => OnArtistClicked(artist))">@artist.Name</span>
+                                @if (artist != t.Track.Artists!.Last())
                                 {
-                                    <span class="artist-link"
-                                          style="cursor:pointer; text-decoration:underline;"
-                                          @onclick="@(() => OnArtistClicked(artist))">
-                                        @artist.Name
-                                    </span>
-
-                                    @if (artist != t.Track.Artists.Last())
-                                    {
-                                        <span>, </span>
-                                    }
+                                    <span>, </span>
                                 }
-                            </div>
+                            }
                         </div>
                     </div>
 
-                    <div class="track-duration">
-                        @FormatDuration(t.Track?.DurationMs ?? 0)
-                    </div>
+                    @if (t.Track.Album != null)
+                    {
+                        <div class="track-row-album">
+                            <span class="text-link"
+                                  @onclick:stopPropagation="true"
+                                  @onclick="@(() => OnAlbumClicked(t.Track))">@t.Track.Album.Name</span>
+                        </div>
+                    }
 
-                    <button class="track-favorite-btn"
-                            @onclick:stopPropagation
+                    <button class="like-btn"
+                            @onclick:stopPropagation="true"
                             @onclick="() => ToggleFavorite(t.Track)"
-                            title="@(_favoriteTracks.Contains(t.Track?.Id ?? "")
-                                                        ? "Remove from Liked Songs"
-                                                        : "Add to Liked Songs")">
-                        @(_favoriteTracks.Contains(t.Track?.Id ?? "") ? "💚" : "➕")
+                            title="@(_favoriteTracks.Contains(t.Track.Id ?? "") ? "Remove from Liked Songs" : "Add to Liked Songs")">
+                        @(_favoriteTracks.Contains(t.Track.Id ?? "") ? "💚" : "➕")
                     </button>
 
-                </li>
+                    <div class="track-row-meta">@FormatDuration(t.Track.DurationMs)</div>
+                </div>
             }
-        </ul>
+        </div>
     }
+
 </AnimatedPage>
 
 @code {
@@ -91,10 +93,7 @@
     public SpotifyPlaylist? Playlist { get; set; }
     public List<PlaylistTrackItem> Tracks { get; set; } = new();
 
-    private HashSet<string> _animatedTracks = new();
     private HashSet<string> _favoriteTracks = new();
-
-    private bool HeaderLoaded = false;
 
 
     // --- INIT ---
@@ -160,13 +159,6 @@
 
         Playlist = await Auth.GetPlaylistAsync(PlaylistId);
         Tracks = await Auth.GetPlaylistTracksAsync(PlaylistId);
-
-        HeaderLoaded = true;
-
-        _animatedTracks = Tracks
-            .Select(t => t.Track?.Id)
-            .Where(id => id != null)
-            .ToHashSet();
 
         await LoadFavoriteStates();
     }

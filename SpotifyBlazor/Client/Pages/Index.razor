@@ -2,18 +2,26 @@
 
 <PageTitle>SpotifyBlazor</PageTitle>
 
-<h1>Hello, world!</h1>
+<AnimatedPage>
+    <h2 class="page-title">Welcome to SpotifyBlazor</h2>
 
-Welcome to SpotifyBlazor
+    <div class="card-grid">
+        <a href="/liked" class="media-card">
+            <div class="media-card-image media-card-placeholder">💚</div>
+            <div class="media-card-title">Liked</div>
+            <div class="media-card-subtitle">Songs, albums and podcasts</div>
+        </a>
 
-<NavLink href="/liked" class="nav-link">
-    ❤️ Liked Items
-</NavLink>
+        <a href="/playlists" class="media-card">
+            <div class="media-card-image media-card-placeholder">🎶</div>
+            <div class="media-card-title">Playlists</div>
+            <div class="media-card-subtitle">Your playlists</div>
+        </a>
 
-<NavLink href="/playlists" class="nav-link">
-    🎶 View Your Playlists
-</NavLink>
-
-<NavLink href="/history" class="nav-link">
-    🕒 Play History
-</NavLink>
+        <a href="/history" class="media-card">
+            <div class="media-card-image media-card-placeholder">🕒</div>
+            <div class="media-card-title">Recently Played</div>
+            <div class="media-card-subtitle">Your play history</div>
+        </a>
+    </div>
+</AnimatedPage>

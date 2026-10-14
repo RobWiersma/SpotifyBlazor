@@ -592,19 +592,47 @@ public class SpotifyAuthService
             await NotifyPlaybackChangedAsync();
     }
 
+    // Device to fall back to when Spotify has no active device (the in-browser web player)
+    public string? FallbackDeviceId { get; set; }
+
+    // PUT /me/player/play on the active device. If there isn't one (404), retry on the fallback device.
+    private async Task<HttpResponseMessage> SendPlayAsync(object? body)
+    {
+        var res = await SendPlayRequestAsync(body, null);
+
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound && !string.IsNullOrEmpty(FallbackDeviceId))
+        {
+            _logger.LogInformation("Play: no active device, falling back to web player");
+            res = await SendPlayRequestAsync(body, FallbackDeviceId);
+        }
+
+        return res;
+    }
+
+    private Task<HttpResponseMessage> SendPlayRequestAsync(object? body, string? deviceId)
+    {
+        var url = "https://api.spotify.com/v1/me/player/play";
+        if (!string.IsNullOrEmpty(deviceId))
+            url += $"?device_id={Uri.EscapeDataString(deviceId)}";
+
+        var req = new HttpRequestMessage(HttpMethod.Put, url);
+
+        if (body != null)
+            req.Content = JsonContent.Create(body, body.GetType());
+
+        if (!string.IsNullOrEmpty(AccessToken))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+        return _http.SendAsync(req);
+    }
+
     public async Task PlayAsync()
     {
         _logger.LogInformation("PlayAsync: Resuming playback");
 
         await RefreshIfNeededAsync();
 
-        var req = new HttpRequestMessage(HttpMethod.Put,
-            "https://api.spotify.com/v1/me/player/play");
-
-        if (!string.IsNullOrEmpty(AccessToken))
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
-
-        var res = await _http.SendAsync(req);
+        var res = await SendPlayAsync(null);
 
         _logger.LogInformation("PlayAsync: Response {StatusCode}", res.StatusCode);
 
@@ -624,20 +652,7 @@ public class SpotifyAuthService
             uris = new[] { trackUri }
         };
 
-        var req = new HttpRequestMessage(
-            HttpMethod.Put,
-            "https://api.spotify.com/v1/me/player/play")
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        if (!string.IsNullOrEmpty(AccessToken))
-        {
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-        }
-
-        var res = await _http.SendAsync(req);
+        var res = await SendPlayAsync(body);
 
         _logger.LogInformation(
             "PlayTrackAsync: Response {StatusCode}",
@@ -669,18 +684,7 @@ public class SpotifyAuthService
             position_ms = 0
         };
 
-        var req = new HttpRequestMessage(
-            HttpMethod.Put,
-            "https://api.spotify.com/v1/me/player/play")
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        if (!string.IsNullOrEmpty(AccessToken))
-            req.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", AccessToken);
-
-        var res = await _http.SendAsync(req);
+        var res = await SendPlayAsync(body);
 
         _logger.LogInformation(
             "PlayTrackInContextAsync: Response {StatusCode}",
@@ -1415,17 +1419,7 @@ public class SpotifyAuthService
             uris = new[] { $"spotify:episode:{episodeId}" }
         };
 
-        var req = new HttpRequestMessage(
-            HttpMethod.Put,
-            "https://api.spotify.com/v1/me/player/play")
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        req.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", AccessToken);
-
-        var res = await _http.SendAsync(req);
+        var res = await SendPlayAsync(body);
 
         if (res.IsSuccessStatusCode)
             await NotifyPlaybackChangedAsync();
@@ -1549,7 +1543,7 @@ public class SpotifyAuthService
         await NotifyPlaybackChangedAsync();
     }
 
-    private async Task NotifyPlaybackChangedAsync()
+    public async Task NotifyPlaybackChangedAsync()
     {
         if (OnPlaybackChanged == null)
             return;

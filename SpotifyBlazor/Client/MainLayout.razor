@@ -4,6 +4,7 @@
 @inject SpotifyAuthService Auth
 @inject NavigationManager Navigation
 @inject TelemetryService Telemetry
+@inject WebPlayerService WebPlayer
 @using SpotifyBlazor.Client.Shared
 @using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Layout
@@ -50,10 +51,22 @@
         Auth.LoginStateChanged += OnLoginStateChanged;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // JS interop isn't available until after the first render
+        if (firstRender && Auth.State == LoginState.LoggedIn)
+            await WebPlayer.StartAsync();
+    }
+
     private void OnLoginStateChanged(LoginState state)
     {
+        if (state == LoginState.NotLoggedIn)
+            _ = WebPlayer.StopAsync();
+
         if (state == LoginState.LoggedIn)
         {
+            _ = WebPlayer.StartAsync();
+
             // Optional telemetry when layout becomes authenticated
             Telemetry.TrackAsync(
                 "Info",

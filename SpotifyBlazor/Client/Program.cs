@@ -22,6 +22,7 @@ builder.Services.AddScoped<HttpClient>(sp =>
 builder.Services.AddScoped<ConfigService>();
 builder.Services.AddScoped<SpotifyAuthService>();
 builder.Services.AddScoped<TelemetryService>();
+builder.Services.AddScoped<WebPlayerService>();
 
 var host = builder.Build();
 

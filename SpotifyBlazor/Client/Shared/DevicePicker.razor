@@ -1,6 +1,7 @@
 ﻿@using SpotifyBlazor.Client.Services
 @using SpotifyBlazor.Shared.Models
 @inject SpotifyAuthService Auth
+@inject WebPlayerService WebPlayer
 @inject IJSRuntime JS
 
 <div class="device-picker-container" @onclick:stopPropagation="true">
@@ -24,10 +25,15 @@
                             @onclick:stopPropagation="true"
                             @onclick="() => Switch(d.Id)"
                             style="@GetStyle(d)">
-                        <span>@GetIcon(d.Type)</span>
-                        <span>@d.Name</span>
+                        <span>@(d.Id == WebPlayer.DeviceId ? "🌐" : GetIcon(d.Type))</span>
+                        <span>@(d.Id == WebPlayer.DeviceId ? "This browser" : d.Name)</span>
                     </button>
                 }
+            }
+
+            @if (!string.IsNullOrEmpty(WebPlayer.Error))
+            {
+                <div class="device-menu-item text-warning small">@WebPlayer.Error</div>
             }
         </div>
     }
@@ -69,6 +75,10 @@
 
     private async Task Switch(string id)
     {
+        // Unlock browser audio while we're still inside the click gesture
+        if (id == WebPlayer.DeviceId)
+            await WebPlayer.ActivateAsync();
+
         await Auth.TransferPlaybackAsync(id);
 
         // Refresh device list

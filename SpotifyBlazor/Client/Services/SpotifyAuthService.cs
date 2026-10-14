@@ -697,6 +697,37 @@ public class SpotifyAuthService
         }
     }
 
+    // Play a specific track inside a context (album/playlist) by URI, so next/previous work.
+    // Safer than a position index for multi-disc albums, where track numbers restart per disc.
+    public async Task PlayTrackInContextAsync(string contextUri, string trackUri)
+    {
+        _logger.LogInformation(
+            "PlayTrackInContextAsync: Playing {TrackUri} in context {ContextUri}",
+            trackUri,
+            contextUri);
+
+        await RefreshIfNeededAsync();
+
+        var body = new
+        {
+            context_uri = contextUri,
+            offset = new { uri = trackUri },
+            position_ms = 0
+        };
+
+        var res = await SendPlayAsync(body);
+
+        _logger.LogInformation(
+            "PlayTrackInContextAsync: Response {StatusCode}",
+            res.StatusCode);
+
+        if (res.IsSuccessStatusCode)
+        {
+            await Task.Delay(250);
+            await NotifyPlaybackChangedAsync();
+        }
+    }
+
     public async Task<SpotifyLikedSongs?> GetLikedSongsAsync(int offset = 0, int limit = 50)
     {
         _logger.LogInformation("GetLikedSongsAsync: Fetching liked songs offset={Offset} limit={Limit}",
@@ -867,10 +898,16 @@ public class SpotifyAuthService
 
     public async Task<List<SearchResult>> SearchAsync(string query)
     {
+        var results = new List<SearchResult>();
+
+        if (string.IsNullOrWhiteSpace(query))
+            return results;
+
         _logger.LogInformation("SearchAsync: query={Query}", query);
 
+        await RefreshIfNeededAsync();
+
         var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track,artist,album&limit=10";
-        _logger.LogInformation("SearchAsync: GET {Url}", url);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
@@ -882,66 +919,95 @@ public class SpotifyAuthService
             response.StatusCode,
             (DateTime.UtcNow - start).TotalMilliseconds);
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Spotify search failed: {response.StatusCode}");
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var results = new List<SearchResult>();
 
         // Tracks
-        if (json.TryGetProperty("tracks", out var tracks) &&
-            tracks.TryGetProperty("items", out var trackItems))
+        foreach (var item in Items(json, "tracks"))
         {
-            foreach (var item in trackItems.EnumerateArray())
+            var album = item.TryGetProperty("album", out var a) ? a : default;
+
+            results.Add(new SearchResult
             {
-                results.Add(new SearchResult
-                {
-                    Id = item.GetProperty("uri").GetString(),
-                    Type = "track",
-                    Name = item.GetProperty("name").GetString(),
-                    ImageUrl = item.GetProperty("album")
-                                  .GetProperty("images")[0]
-                                  .GetProperty("url").GetString()
-                });
-            }
+                Id = Str(item, "id"),
+                Uri = Str(item, "uri"),
+                Type = "track",
+                Name = Str(item, "name"),
+                ImageUrl = FirstImage(album),
+                Artists = ParseArtists(item),
+                DurationMs = item.TryGetProperty("duration_ms", out var d) ? d.GetInt32() : 0,
+                TrackNumber = item.TryGetProperty("track_number", out var n) ? n.GetInt32() : 0,
+                AlbumId = Str(album, "id"),
+                AlbumUri = Str(album, "uri"),
+                AlbumName = Str(album, "name")
+            });
         }
 
         // Artists
-        if (json.TryGetProperty("artists", out var artists) &&
-            artists.TryGetProperty("items", out var artistItems))
+        foreach (var item in Items(json, "artists"))
         {
-            foreach (var item in artistItems.EnumerateArray())
+            results.Add(new SearchResult
             {
-                results.Add(new SearchResult
-                {
-                    Id = item.GetProperty("id").GetString(),
-                    Type = "artist",
-                    Name = item.GetProperty("name").GetString(),
-                    ImageUrl = item.GetProperty("images").GetArrayLength() > 0
-                        ? item.GetProperty("images")[0].GetProperty("url").GetString()
-                        : ""
-                });
-            }
+                Id = Str(item, "id"),
+                Uri = Str(item, "uri"),
+                Type = "artist",
+                Name = Str(item, "name"),
+                ImageUrl = FirstImage(item)
+            });
         }
 
         // Albums
-        if (json.TryGetProperty("albums", out var albums) &&
-            albums.TryGetProperty("items", out var albumItems))
+        foreach (var item in Items(json, "albums"))
         {
-            foreach (var item in albumItems.EnumerateArray())
+            var releaseDate = Str(item, "release_date");
+
+            results.Add(new SearchResult
             {
-                results.Add(new SearchResult
-                {
-                    Id = item.GetProperty("id").GetString(),
-                    Type = "album",
-                    Name = item.GetProperty("name").GetString(),
-                    ImageUrl = item.GetProperty("images")[0]
-                                  .GetProperty("url").GetString()
-                });
-            }
+                Id = Str(item, "id"),
+                Uri = Str(item, "uri"),
+                Type = "album",
+                Name = Str(item, "name"),
+                ImageUrl = FirstImage(item),
+                Artists = ParseArtists(item),
+                ReleaseYear = releaseDate.Length >= 4 ? releaseDate[..4] : null
+            });
         }
 
         _logger.LogInformation("SearchAsync: Total results={Count}", results.Count);
         return results;
+
+        // --- JSON helpers: Spotify sometimes returns null items or empty image lists ---
+
+        static IEnumerable<JsonElement> Items(JsonElement root, string section) =>
+            root.TryGetProperty(section, out var s) &&
+            s.TryGetProperty("items", out var items) &&
+            items.ValueKind == JsonValueKind.Array
+                ? items.EnumerateArray().Where(i => i.ValueKind == JsonValueKind.Object)
+                : Enumerable.Empty<JsonElement>();
+
+        static string Str(JsonElement el, string name) =>
+            el.ValueKind == JsonValueKind.Object &&
+            el.TryGetProperty(name, out var v) &&
+            v.ValueKind == JsonValueKind.String
+                ? v.GetString() ?? ""
+                : "";
+
+        static string FirstImage(JsonElement el) =>
+            el.ValueKind == JsonValueKind.Object &&
+            el.TryGetProperty("images", out var imgs) &&
+            imgs.ValueKind == JsonValueKind.Array &&
+            imgs.GetArrayLength() > 0
+                ? Str(imgs[0], "url")
+                : "";
+
+        static List<SpotifyArtist> ParseArtists(JsonElement el) =>
+            el.TryGetProperty("artists", out var arts) && arts.ValueKind == JsonValueKind.Array
+                ? arts.EnumerateArray()
+                      .Select(x => new SpotifyArtist { Id = Str(x, "id"), Name = Str(x, "name") })
+                      .ToList()
+                : new List<SpotifyArtist>();
     }
 
     public async Task<SpotifyPlaylistResponse> GetUserPlaylistsAsync()

@@ -1,0 +1,431 @@
+@page "/search"
+@implements IDisposable
+@inject NavigationManager Nav
+@inject SpotifyAuthService Auth
+@inject TelemetryService Telemetry
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+
+<AnimatedPage>
+
+    <div class="search-page">
+
+        @if (Auth.State != LoginState.LoggedIn)
+        {
+            <div class="search-empty">
+                <div class="search-empty-icon">🔒</div>
+                <p>Log in with Spotify to search.</p>
+            </div>
+        }
+        else if (string.IsNullOrWhiteSpace(Q))
+        {
+            <div class="search-empty">
+                <div class="search-empty-icon">🔎</div>
+                <p>Search for songs, artists, or albums.</p>
+            </div>
+        }
+        else
+        {
+            <h2 class="search-heading">Results for <span>“@Q”</span></h2>
+
+            <div class="search-chips">
+                @foreach (var (key, label) in Filters)
+                {
+                    <button class="search-chip @(_filter == key ? "active" : "")"
+                            @onclick="() => SetFilter(key)">
+                        @label
+                    </button>
+                }
+            </div>
+
+            @if (_isSearching)
+            {
+                <div class="search-skeleton">
+                    @for (int i = 0; i < 5; i++)
+                    {
+                        <div class="search-skeleton-row"></div>
+                    }
+                </div>
+            }
+            else if (_failed)
+            {
+                <div class="search-empty">
+                    <p>Search failed.</p>
+                    <button class="btn btn-secondary" @onclick="RunSearch">Try again</button>
+                </div>
+            }
+            else if (_results.Count == 0)
+            {
+                <div class="search-empty">
+                    <div class="search-empty-icon">🎧</div>
+                    <p>No results for “@Q”. Check the spelling or try something else.</p>
+                </div>
+            }
+            else
+            {
+                @switch (_filter)
+                {
+                    case "all":
+                        @RenderAll()
+                        break;
+                    case "track":
+                        @RenderSongs(Tracks, showAlbum: true)
+                        break;
+                    case "artist":
+                        @RenderArtists(Artists)
+                        break;
+                    case "album":
+                        @RenderAlbums(Albums)
+                        break;
+                }
+            }
+        }
+
+    </div>
+
+</AnimatedPage>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Q { get; set; }
+
+    private string? _lastQuery;
+    private bool _isSearching;
+    private bool _failed;
+    private string _filter = "all";
+    private List<SearchResult> _results = new();
+
+    private static readonly (string Key, string Label)[] Filters =
+    {
+        ("all", "All"), ("track", "Songs"), ("artist", "Artists"), ("album", "Albums")
+    };
+
+    private IEnumerable<SearchResult> Tracks => _results.Where(r => r.Type == "track");
+    private IEnumerable<SearchResult> Artists => _results.Where(r => r.Type == "artist");
+    private IEnumerable<SearchResult> Albums => _results.Where(r => r.Type == "album");
+
+    // Spotify-style: an artist whose name matches the query exactly wins, otherwise the top track
+    private SearchResult? TopResult =>
+        Artists.FirstOrDefault(a => string.Equals(a.Name, Q?.Trim(), StringComparison.OrdinalIgnoreCase))
+        ?? Tracks.FirstOrDefault()
+        ?? _results.FirstOrDefault();
+
+    // --- LIFECYCLE ---
+
+    protected override void OnInitialized()
+    {
+        Auth.LoginStateChanged += HandleLoginStateChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Runs again when the header search box navigates here with a new ?q=
+        if (Q == _lastQuery)
+            return;
+
+        _lastQuery = Q;
+        _filter = "all";
+
+        if (Auth.State == LoginState.LoggedIn)
+            await RunSearch();
+    }
+
+    private async void HandleLoginStateChanged(LoginState state)
+    {
+        if (state == LoginState.LoggedIn)
+        {
+            await RunSearch();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose()
+    {
+        Auth.LoginStateChanged -= HandleLoginStateChanged;
+    }
+
+    // --- SEARCH ---
+
+    private async Task RunSearch()
+    {
+        if (Auth.State != LoginState.LoggedIn || string.IsNullOrWhiteSpace(Q))
+        {
+            _results = new();
+            return;
+        }
+
+        _isSearching = true;
+        _failed = false;
+        StateHasChanged();
+
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Search executed: {Q}",
+            context: null,
+            page: "SearchPage",
+            component: "SearchBox",
+            action: "SearchExecuted"
+        );
+
+        try
+        {
+            _results = await Auth.SearchAsync(Q);
+        }
+        catch
+        {
+            _results = new();
+            _failed = true;
+        }
+
+        _isSearching = false;
+
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Search results received: {_results.Count} items",
+            context: $"Query: {Q}",
+            page: "SearchPage",
+            component: "SearchResults",
+            action: "ResultsReceived"
+        );
+    }
+
+    private void SetFilter(string filter) => _filter = filter;
+
+    // --- RENDERING ---
+
+    private RenderFragment RenderAll() => __builder =>
+    {
+        var top = TopResult;
+
+        <div class="search-top-row">
+
+            @if (top != null)
+            {
+                <section class="search-section search-top">
+                    <h3 class="search-section-title">Top result</h3>
+
+                    <div class="search-top-card" @onclick="() => Open(top)">
+                        <img src="@top.ImageUrl"
+                             class="search-top-image @(top.Type == "artist" ? "round" : "")"
+                             alt="" />
+
+                        <div class="search-top-name">@top.Name</div>
+
+                        <div class="search-top-meta">
+                            @if (top.Artists.Any())
+                            {
+                                <span>@string.Join(", ", top.Artists.Select(a => a.Name))</span>
+                            }
+                            <span class="search-type-pill">@TypeLabel(top.Type)</span>
+                        </div>
+
+                        @if (top.Type == "track")
+                        {
+                            <button class="search-play-btn"
+                                    title="Play"
+                                    @onclick:stopPropagation="true"
+                                    @onclick="() => Play(top)">▶</button>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (Tracks.Any())
+            {
+                <section class="search-section search-songs-preview">
+                    <div class="search-section-header">
+                        <h3 class="search-section-title">Songs</h3>
+                        <button class="search-see-all" @onclick='() => SetFilter("track")'>Show all</button>
+                    </div>
+                    @RenderSongs(Tracks.Take(4), showAlbum: false)
+                </section>
+            }
+        </div>
+
+        @if (Artists.Any())
+        {
+            <section class="search-section">
+                <div class="search-section-header">
+                    <h3 class="search-section-title">Artists</h3>
+                    <button class="search-see-all" @onclick='() => SetFilter("artist")'>Show all</button>
+                </div>
+                @RenderArtists(Artists.Take(6))
+            </section>
+        }
+
+        @if (Albums.Any())
+        {
+            <section class="search-section">
+                <div class="search-section-header">
+                    <h3 class="search-section-title">Albums</h3>
+                    <button class="search-see-all" @onclick='() => SetFilter("album")'>Show all</button>
+                </div>
+                @RenderAlbums(Albums.Take(6))
+            </section>
+        }
+    };
+
+    private RenderFragment RenderSongs(IEnumerable<SearchResult> tracks, bool showAlbum) => __builder =>
+    {
+        <div class="search-song-list">
+            @foreach (var t in tracks)
+            {
+                <div class="search-song" @onclick="() => Play(t)">
+
+                    <div class="search-song-art">
+                        <img src="@t.ImageUrl" alt="" />
+                        <span class="search-song-play">▶</span>
+                    </div>
+
+                    <div class="search-song-info">
+                        <div class="search-song-name">@t.Name</div>
+                        <div class="search-song-artists">
+                            @foreach (var artist in t.Artists)
+                            {
+                                <span class="search-link"
+                                      @onclick:stopPropagation="true"
+                                      @onclick="() => GoToArtist(artist.Id)">@artist.Name</span>
+                                @if (artist != t.Artists.Last())
+                                {
+                                    <span>, </span>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    @if (showAlbum && !string.IsNullOrEmpty(t.AlbumName))
+                    {
+                        <div class="search-song-album">
+                            <span class="search-link"
+                                  @onclick:stopPropagation="true"
+                                  @onclick="() => GoToAlbum(t.AlbumId)">@t.AlbumName</span>
+                        </div>
+                    }
+
+                    <div class="search-song-duration">@FormatDuration(t.DurationMs)</div>
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment RenderArtists(IEnumerable<SearchResult> artists) => __builder =>
+    {
+        <div class="search-grid">
+            @foreach (var a in artists)
+            {
+                <div class="search-card" @onclick="() => Open(a)">
+                    @if (string.IsNullOrEmpty(a.ImageUrl))
+                    {
+                        <div class="search-card-image round search-card-placeholder">🎤</div>
+                    }
+                    else
+                    {
+                        <img src="@a.ImageUrl" class="search-card-image round" alt="" />
+                    }
+                    <div class="search-card-title">@a.Name</div>
+                    <div class="search-card-subtitle">Artist</div>
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment RenderAlbums(IEnumerable<SearchResult> albums) => __builder =>
+    {
+        <div class="search-grid">
+            @foreach (var a in albums)
+            {
+                <div class="search-card" @onclick="() => Open(a)">
+                    @if (string.IsNullOrEmpty(a.ImageUrl))
+                    {
+                        <div class="search-card-image search-card-placeholder">💿</div>
+                    }
+                    else
+                    {
+                        <img src="@a.ImageUrl" class="search-card-image" alt="" />
+                    }
+                    <div class="search-card-title">@a.Name</div>
+                    <div class="search-card-subtitle">
+                        @(a.ReleaseYear != null ? $"{a.ReleaseYear} · " : "")@string.Join(", ", a.Artists.Select(x => x.Name))
+                    </div>
+                </div>
+            }
+        </div>
+    };
+
+    // --- ACTIONS ---
+
+    private void Open(SearchResult item)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        _ = Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Search result clicked: {item.Name}",
+            context: $"Type: {item.Type}",
+            page: "SearchPage",
+            component: "SearchResults",
+            action: "ResultClicked"
+        );
+
+        switch (item.Type)
+        {
+            case "track":
+                _ = Play(item);
+                break;
+            case "artist":
+                GoToArtist(item.Id);
+                break;
+            case "album":
+                GoToAlbum(item.Id);
+                break;
+        }
+    }
+
+    private void GoToArtist(string? id)
+    {
+        if (!string.IsNullOrEmpty(id))
+            Nav.NavigateTo($"/artist/{id}");
+    }
+
+    private void GoToAlbum(string? id)
+    {
+        if (!string.IsNullOrEmpty(id))
+            Nav.NavigateTo($"/album/{id}");
+    }
+
+    private async Task Play(SearchResult track)
+    {
+        if (Auth.State != LoginState.LoggedIn)
+            return;
+
+        await Telemetry.TrackAsync(
+            level: "Info",
+            message: $"Track played from search: {track.Id}",
+            context: $"Query: {Q}",
+            page: "SearchPage",
+            component: "SearchResults",
+            action: "TrackPlayed"
+        );
+
+        // Play inside the album context so next/previous work
+        if (!string.IsNullOrEmpty(track.AlbumUri) && !string.IsNullOrEmpty(track.Uri))
+            await Auth.PlayTrackInContextAsync(track.AlbumUri, track.Uri);
+        else if (!string.IsNullOrEmpty(track.Uri))
+            await Auth.PlayTrackAsync(track.Uri);
+    }
+
+    private static string TypeLabel(string type) => type switch
+    {
+        "track" => "Song",
+        "artist" => "Artist",
+        "album" => "Album",
+        _ => type
+    };
+
+    private static string FormatDuration(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+}

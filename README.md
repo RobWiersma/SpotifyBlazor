@@ -2,7 +2,7 @@ https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/
 
 # SpotifyBlazor
 
-![.NET](https://img.shields.io/badge/.NET-7.0-blueviolet)
+![.NET](https://img.shields.io/badge/.NET-8.0-blueviolet)
 ![Blazor](https://img.shields.io/badge/Blazor-WebAssembly-512BD4)
 ![C#](https://img.shields.io/badge/C%23-Developer-blue)
 ![Spotify Web API](https://img.shields.io/badge/Spotify-Web%20API-1DB954)
@@ -45,7 +45,7 @@ SpotifyBlazor is a full‑stack .NET application that brings Spotify’s ecosyst
 - JWT authentication  
 - Rate limiting on token and telemetry endpoints  
 - Application Insights  
-- C# / .NET 7  
+- C# / .NET 8  
 
 ---
 

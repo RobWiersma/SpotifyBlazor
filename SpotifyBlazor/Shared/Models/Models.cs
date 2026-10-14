@@ -344,6 +344,19 @@ namespace SpotifyBlazor.Shared.Models
         public string Type { get; set; } // track, artist, album
         public string Name { get; set; }
         public string ImageUrl { get; set; }
+
+        public string? Uri { get; set; }
+        public List<SpotifyArtist> Artists { get; set; } = new();
+
+        // Tracks
+        public int DurationMs { get; set; }
+        public int TrackNumber { get; set; }
+        public string? AlbumId { get; set; }
+        public string? AlbumUri { get; set; }
+        public string? AlbumName { get; set; }
+
+        // Albums
+        public string? ReleaseYear { get; set; }
     }
 
     public class SpotifyPlaylistResponse

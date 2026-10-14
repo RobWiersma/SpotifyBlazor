@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+This file is used by the publish/package process of your Web project. You can customize the behavior of this process
+by editing this MSBuild file. In order to learn more about this please visit https://go.microsoft.com/fwlink/?LinkID=208121. 
+-->
+<Project>
+  <PropertyGroup>
+    <WebPublishMethod>MSDeploy</WebPublishMethod>
+    <ResourceId>/subscriptions/29c84eac-71ae-4faf-b123-2774185743b4/resourceGroups/ResourceGroup1/providers/Microsoft.Web/sites/SpotifyBlazor</ResourceId>
+    <ResourceGroup>ResourceGroup1</ResourceGroup>
+    <PublishProvider>AzureWebSite</PublishProvider>
+    <LastUsedBuildConfiguration>Release</LastUsedBuildConfiguration>
+    <LastUsedPlatform>Any CPU</LastUsedPlatform>
+    <SiteUrlToLaunchAfterPublish>https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net</SiteUrlToLaunchAfterPublish>
+    <LaunchSiteAfterPublish>true</LaunchSiteAfterPublish>
+    <ExcludeApp_Data>false</ExcludeApp_Data>
+    <ProjectGuid>570400ef-b4b1-e729-a3d1-c12b06910757</ProjectGuid>
+    <MSDeployServiceURL>spotifyblazor-ayb0fch4d9ceaha2.scm.westus3-01.azurewebsites.net:443</MSDeployServiceURL>
+    <DeployIisAppPath>SpotifyBlazor</DeployIisAppPath>
+    <RemoteSitePhysicalPath />
+    <SkipExtraFilesOnServer>false</SkipExtraFilesOnServer>
+    <MSDeployPublishMethod>WMSVC</MSDeployPublishMethod>
+    <EnableMSDeployBackup>true</EnableMSDeployBackup>
+    <EnableMsDeployAppOffline>true</EnableMsDeployAppOffline>
+    <UserName />
+    <_SavePWD>false</_SavePWD>
+    <_DestinationType>AzureWebSite</_DestinationType>
+    <TargetFramework>net8.0</TargetFramework>
+    <SelfContained>false</SelfContained>
+    <InstallAspNetCoreSiteExtension>false</InstallAspNetCoreSiteExtension>
+  </PropertyGroup>
+</Project>

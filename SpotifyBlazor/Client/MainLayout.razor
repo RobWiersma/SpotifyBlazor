@@ -135,7 +135,8 @@
                 );
             }
 
-            Navigation.NavigateTo($"/search?q={SearchText}", forceLoad: true);
+            // No forceLoad: a full reload would restart the app and cut off browser playback
+            Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(SearchText)}");
         }
     }
 

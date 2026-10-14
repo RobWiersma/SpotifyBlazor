@@ -138,7 +138,25 @@ else
 
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();   // ⭐ Serve Client WASM
-app.UseStaticFiles();            // ⭐ Serve Client static assets
+
+// Our own CSS/JS/HTML aren't fingerprinted, so make browsers revalidate them on every
+// load (a cheap 304 when unchanged) instead of serving a stale copy after a publish.
+// Blazor's _framework files handle their own caching and are left alone.
+var revalidateStaticFiles = new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var path = ctx.Context.Request.Path;
+        if (path.StartsWithSegments("/_framework"))
+            return;
+
+        var ext = Path.GetExtension(ctx.File.Name);
+        if (ext is ".css" or ".js" or ".html")
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
+    }
+};
+
+app.UseStaticFiles(revalidateStaticFiles);   // ⭐ Serve Client static assets
 
 app.UseRouting();
 
@@ -343,6 +361,6 @@ app.MapGet("/env", (IConfiguration config) =>
 // Hosted Blazor WASM fallback
 app.MapRazorPages();
 app.MapControllers();
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html", revalidateStaticFiles);
 
 app.Run();

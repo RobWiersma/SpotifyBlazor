@@ -826,6 +826,8 @@ public class SpotifyContext
     public class PlayHistoryItem
     {
         public SpotifyTrack Track { get; set; }
+
+        [JsonPropertyName("played_at")]
         public DateTime PlayedAt { get; set; }
     }
 

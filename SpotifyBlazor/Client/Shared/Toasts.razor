@@ -1,0 +1,71 @@
+@using SpotifyBlazor.Client.Services
+@implements IDisposable
+@inject NotificationService Notifications
+
+<div class="toast-stack" aria-live="polite">
+    @foreach (var t in Notifications.Toasts)
+    {
+        <div class="app-toast @(t.Level == ToastLevel.Error ? "error" : "warning")" @key="t.Id">
+            <div class="app-toast-icon">@(t.Level == ToastLevel.Error ? "⛔" : "⚠️")</div>
+
+            <div class="app-toast-body">
+                <div class="app-toast-title">
+                    @t.Title
+                    @if (t.Count > 1)
+                    {
+                        <span class="app-toast-count">×@t.Count</span>
+                    }
+                </div>
+
+                @if (t.RetryAt is { } retryAt)
+                {
+                    <div class="app-toast-retry">@RetryText(retryAt)</div>
+                }
+
+                <div class="app-toast-message">@t.Message</div>
+            </div>
+
+            <button class="app-toast-close" title="Dismiss" @onclick="() => Notifications.Dismiss(t.Id)">✕</button>
+        </div>
+    }
+</div>
+
+@code {
+    // Ticks once a second to update rate-limit countdowns
+    private Timer? _countdownTimer;
+
+    protected override void OnInitialized()
+    {
+        Notifications.OnChange += HandleChange;
+        _countdownTimer = new Timer(_ =>
+        {
+            if (Notifications.Toasts.Any(t => t.RetryAt != null))
+                InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void HandleChange() => InvokeAsync(StateHasChanged);
+
+    private static string RetryText(DateTimeOffset retryAt)
+    {
+        var left = retryAt - DateTimeOffset.Now;
+
+        if (left <= TimeSpan.Zero)
+            return "You can try again now";
+
+        if (left < TimeSpan.FromMinutes(1))
+            return $"Try again in {Math.Ceiling(left.TotalSeconds)}s";
+
+        if (left < TimeSpan.FromHours(1))
+            return $"Try again in {(int)left.TotalMinutes}m {left.Seconds:D2}s";
+
+        // Long waits (e.g. a quota block): show the clock time too
+        return $"Try again in {(int)left.TotalHours}h {left.Minutes:D2}m (at {retryAt.ToLocalTime():t})";
+    }
+
+    public void Dispose()
+    {
+        Notifications.OnChange -= HandleChange;
+        _countdownTimer?.Dispose();
+    }
+}

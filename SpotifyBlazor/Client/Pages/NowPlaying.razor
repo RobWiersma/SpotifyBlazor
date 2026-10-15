@@ -118,6 +118,10 @@
 
     private int _apiCounter;
 
+    // Stops the refresh loop when leaving the page; otherwise each visit leaks
+    // a loop that keeps polling Spotify and eats into the app's rate limit.
+    private readonly CancellationTokenSource _refreshCts = new();
+
     private string AlbumImage =>
         _nowPlaying?.Item?.Album?.Images?.FirstOrDefault()?.Url ?? "";
 
@@ -146,6 +150,9 @@
 
     public void Dispose()
     {
+        _refreshCts.Cancel();
+        _refreshCts.Dispose();
+
         Auth.LoginStateChanged -= HandleLoginStateChanged;
         Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
     }
@@ -179,15 +186,22 @@
         if (firstRender)
         {
             _lyricsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/lyrics.js");
-            _ = RefreshLoop();
+            _ = RefreshLoop(_refreshCts.Token);
         }
     }
 
-    private async Task RefreshLoop()
+    private async Task RefreshLoop(CancellationToken token)
     {
-        while (true)
+        while (!token.IsCancellationRequested)
         {
-            await Task.Delay(1000);
+            try
+            {
+                await Task.Delay(1000, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
 
             if (_nowPlaying?.IsPlaying == true)
             {

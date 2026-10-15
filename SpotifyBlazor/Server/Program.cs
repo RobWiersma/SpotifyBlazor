@@ -55,6 +55,19 @@ builder.Services.AddAuthorization();
 // ----------------------------------------------------
 builder.Services.AddRateLimiter(options =>
 {
+    // Reject with 429 + Retry-After (when the limiter knows it) so the client can show the wait
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, _) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+
+        return ValueTask.CompletedTask;
+    };
+
     // Global steady limit: 100 req/min per IP
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -181,6 +194,7 @@ app.MapGet("/api/config", (IConfiguration config) =>
 
 // TOKEN EXCHANGE (burst + steady)
 app.MapPost("/api/spotify/exchange", async (
+    HttpContext ctx,
     IConfiguration config,
     IHttpClientFactory httpFactory,
     ExchangeRequest req,
@@ -207,8 +221,10 @@ app.MapPost("/api/spotify/exchange", async (
     // Don't log the body: it contains the access and refresh tokens
     logger.LogWarning("EXCHANGE RESPONSE → {StatusCode}", (int)response.StatusCode);
 
+    // On failure the body is just Spotify's error (no tokens), so it's safe to pass along
     if (!response.IsSuccessStatusCode)
-        return Results.Problem("Spotify token exchange failed");
+        return SpotifyProblem(ctx, response, $"Spotify token exchange failed: {raw}",
+            StatusCodes.Status500InternalServerError);
 
     var token = JsonSerializer.Deserialize<TokenResponseFull>(raw);
 
@@ -219,6 +235,7 @@ app.MapPost("/api/spotify/exchange", async (
 
 // REFRESH TOKEN (burst + steady)
 app.MapPost("/api/spotify/refresh", async (
+    HttpContext ctx,
     IHttpClientFactory httpFactory,
     IConfiguration config,
     RefreshRequest req) =>
@@ -238,7 +255,7 @@ app.MapPost("/api/spotify/refresh", async (
         new FormUrlEncodedContent(values));
 
     if (!response.IsSuccessStatusCode)
-        return Results.Problem("Spotify token refresh failed", statusCode: (int)response.StatusCode);
+        return SpotifyProblem(ctx, response, "Spotify token refresh failed", (int)response.StatusCode);
 
     var json = await response.Content.ReadFromJsonAsync<TokenResponseFull>();
     return Results.Ok(json);
@@ -248,6 +265,7 @@ app.MapPost("/api/spotify/refresh", async (
 
 // JWT MINT (burst + steady)
 app.MapPost("/api/auth/spotify-login", async (
+    HttpContext ctx,
     IConfiguration config,
     IHttpClientFactory httpFactory,
     SpotifyLoginRequest req,
@@ -264,13 +282,25 @@ app.MapPost("/api/auth/spotify-login", async (
 
     try
     {
-        me = await http.GetFromJsonAsync<SpotifyMe>("https://api.spotify.com/v1/me");
+        using var meResp = await http.GetAsync("https://api.spotify.com/v1/me");
+
+        if (!meResp.IsSuccessStatusCode)
+        {
+            // Spotify's error body explains 401/403s (expired token, user not allowlisted, etc.)
+            var body = await meResp.Content.ReadAsStringAsync();
+            logger.LogError("JWT MINT → Spotify /me returned {Status}: {Body}",
+                (int)meResp.StatusCode, body);
+            return SpotifyProblem(ctx, meResp, $"Spotify /me returned {(int)meResp.StatusCode}: {body}",
+                StatusCodes.Status502BadGateway);
+        }
+
+        me = await meResp.Content.ReadFromJsonAsync<SpotifyMe>();
         logger.LogWarning("JWT MINT → Spotify /me result: {Me}", me);
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "JWT MINT → Spotify /me call failed");
-        return Results.Problem("Spotify /me failed");
+        return Results.Problem($"Spotify /me failed: {ex.Message}");
     }
 
     if (me is null)
@@ -364,3 +394,19 @@ app.MapControllers();
 app.MapFallbackToFile("index.html", revalidateStaticFiles);
 
 app.Run();
+
+// Turns a failed Spotify response into a problem result. A 429 keeps its status and
+// Retry-After header: browsers can't read Retry-After on Spotify's own responses (CORS
+// doesn't expose it), so passing it through is how the client learns how long to wait.
+static IResult SpotifyProblem(HttpContext ctx, HttpResponseMessage spotifyResponse, string message, int fallbackStatus)
+{
+    if (spotifyResponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+    {
+        if (spotifyResponse.Headers.RetryAfter is { } retryAfter)
+            ctx.Response.Headers.RetryAfter = retryAfter.ToString();
+
+        return Results.Problem(message, statusCode: StatusCodes.Status429TooManyRequests);
+    }
+
+    return Results.Problem(message, statusCode: fallbackStatus);
+}

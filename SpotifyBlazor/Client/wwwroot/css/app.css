@@ -31,6 +31,92 @@ h1:focus {
         content: "An error has occurred."
     }
 
+/* Error toasts (Shared/Toasts.razor), top-right under the header */
+.toast-stack {
+    position: fixed;
+    top: 52px;
+    right: 16px;
+    z-index: 3000; /* above the queue panel and player bar */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 360px;
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+}
+
+.app-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #181818;
+    color: #fff;
+    border-left: 4px solid #e22134;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    animation: toast-in 0.2s ease-out;
+}
+
+    .app-toast.warning {
+        border-left-color: #f59b23;
+    }
+
+.app-toast-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-toast-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.app-toast-count {
+    margin-left: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    padding: 0 8px;
+    font-size: 0.75rem;
+}
+
+.app-toast-retry {
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.app-toast-message {
+    color: #b3b3b3;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+.app-toast-close {
+    background: none;
+    border: none;
+    color: #b3b3b3;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+    .app-toast-close:hover {
+        color: #fff;
+    }
+
+/* Slide only (no fade) so a toast is never left invisible if animations are paused */
+@keyframes toast-in {
+    from {
+        transform: translateY(-8px);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
 /* Boot screen shown in index.html while the app downloads */
 .app-loading {
     min-height: 100vh;

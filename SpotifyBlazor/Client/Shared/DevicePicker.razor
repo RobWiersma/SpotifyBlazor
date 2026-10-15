@@ -3,6 +3,7 @@
 @inject SpotifyAuthService Auth
 @inject WebPlayerService WebPlayer
 @inject IJSRuntime JS
+@implements IDisposable
 
 <div class="device-picker-container" @onclick:stopPropagation="true">
     <button class="btn btn-dark" @onclick="ToggleMenu">
@@ -42,36 +43,51 @@
 @code {
     private List<SpotifyDevice>? devices;
     private bool showMenu = false;
-    private bool refreshLoopStarted = false;
+
+    // Devices are only polled while the menu is open; Spotify rate-limits the
+    // whole app, so background polling from every DevicePicker adds up fast.
+    private CancellationTokenSource? refreshCts;
 
     [Parameter]
     public EventCallback OnDeviceChanged { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    private async Task AutoRefreshLoop(CancellationToken token)
     {
-        devices = await Auth.GetDevicesAsync();
-
-        if (!refreshLoopStarted)
+        try
         {
-            refreshLoopStarted = true;
-            _ = AutoRefreshLoop();
+            while (!token.IsCancellationRequested)
+            {
+                devices = await Auth.GetDevicesAsync();
+                StateHasChanged();
+                await Task.Delay(5000, token);
+            }
         }
-    }
-
-    private async Task AutoRefreshLoop()
-    {
-        while (true)
-        {
-            await Task.Delay(5000);
-            devices = await Auth.GetDevicesAsync();
-            StateHasChanged();
-        }
+        catch (OperationCanceledException) { }
     }
 
     private void ToggleMenu()
     {
         showMenu = !showMenu;
+
+        if (showMenu)
+        {
+            refreshCts = new CancellationTokenSource();
+            _ = AutoRefreshLoop(refreshCts.Token);
+        }
+        else
+        {
+            StopRefresh();
+        }
     }
+
+    private void StopRefresh()
+    {
+        refreshCts?.Cancel();
+        refreshCts?.Dispose();
+        refreshCts = null;
+    }
+
+    public void Dispose() => StopRefresh();
 
     private async Task Switch(string id)
     {
@@ -88,6 +104,7 @@
         await OnDeviceChanged.InvokeAsync();
 
         showMenu = false;
+        StopRefresh();
     }
 
     private string GetIcon(string type)

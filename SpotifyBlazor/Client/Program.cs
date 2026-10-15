@@ -9,9 +9,17 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
+builder.Services.AddScoped<NotificationService>();
+
 builder.Services.AddScoped<HttpClient>(sp =>
 {
-    var client = new HttpClient
+    // Failed responses (Spotify or our API) pop up as toasts
+    var handler = new ErrorNotificationHandler(sp.GetRequiredService<NotificationService>())
+    {
+        InnerHandler = new HttpClientHandler()
+    };
+
+    var client = new HttpClient(handler)
     {
         BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
     };

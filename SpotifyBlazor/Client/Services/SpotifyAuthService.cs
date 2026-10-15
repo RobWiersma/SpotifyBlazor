@@ -260,9 +260,11 @@ public class SpotifyAuthService
 
         if (!resp.IsSuccessStatusCode)
         {
+            // The server's problem detail says why (e.g. what Spotify /me returned)
             _logger.LogWarning(
-                "API JWT exchange failed StatusCode={StatusCode}",
-                resp.StatusCode
+                "API JWT exchange failed StatusCode={StatusCode} Body={Body}",
+                resp.StatusCode,
+                await resp.Content.ReadAsStringAsync()
             );
             SetState(LoginState.LoginFailed);
             return;

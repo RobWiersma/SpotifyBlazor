@@ -1611,8 +1611,39 @@ public class SpotifyAuthService
         await NotifyPlaybackChangedAsync();
     }
 
-    public async Task NotifyPlaybackChangedAsync()
+    // Playback changes arrive in bursts: the browser player fires several state events
+    // per action, and our own play/skip commands notify too. Each notification makes
+    // listeners call Spotify (now playing, favorites, queue...), so collapse bursts into
+    // one refresh, at most one per PlaybackRefreshGap, always shortly after the last change.
+    private static readonly TimeSpan PlaybackRefreshDelay = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan PlaybackRefreshGap = TimeSpan.FromSeconds(2);
+    private bool _playbackRefreshQueued;
+    private DateTime _lastPlaybackRefresh = DateTime.MinValue;
+
+    // Schedules the refresh and returns right away, so play/skip commands don't wait on it
+    public Task NotifyPlaybackChangedAsync()
     {
+        // A refresh is already scheduled and will reflect this change too
+        if (OnPlaybackChanged == null || _playbackRefreshQueued)
+            return Task.CompletedTask;
+
+        _playbackRefreshQueued = true;
+        _ = RunPlaybackRefreshAsync();
+        return Task.CompletedTask;
+    }
+
+    private async Task RunPlaybackRefreshAsync()
+    {
+        var sinceLast = DateTime.UtcNow - _lastPlaybackRefresh;
+        var delay = PlaybackRefreshGap - sinceLast;
+        if (delay < PlaybackRefreshDelay)
+            delay = PlaybackRefreshDelay;
+
+        await Task.Delay(delay);
+
+        _playbackRefreshQueued = false;
+        _lastPlaybackRefresh = DateTime.UtcNow;
+
         if (OnPlaybackChanged == null)
             return;
 
@@ -1620,7 +1651,15 @@ public class SpotifyAuthService
         {
             if (handler is Func<Task> callback)
             {
-                await callback();
+                try
+                {
+                    await callback();
+                }
+                catch (Exception ex)
+                {
+                    // Nobody awaits this background refresh, so log instead of losing the error
+                    _logger.LogWarning("Playback refresh handler failed: {Message}", ex.Message);
+                }
             }
         }
     }

@@ -164,6 +164,7 @@ h1:focus {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    min-width: 0; /* let it shrink to the screen; otherwise long one-line titles widen the whole page on phones */
 }
 
 .content-root {

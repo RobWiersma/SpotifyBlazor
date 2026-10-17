@@ -306,7 +306,9 @@
     {
         await LoadNowPlaying();
         await UpdateFavoriteState();
-        await LoadQueue();
+
+        if (_showQueue)
+            await LoadQueue();
 
         StartRefreshLoop();
 
@@ -327,9 +329,16 @@
     {
         apiRefreshCounter = 0;
 
+        var previousTrackId = current?.Item?.Id;
         await LoadNowPlaying();
-        await UpdateFavoriteState();
-        await LoadQueue();
+
+        // Only re-check what changed: the liked state belongs to the track, and
+        // the queue is only needed while its panel is open (it loads on open)
+        if (current?.Item?.Id != previousTrackId)
+            await UpdateFavoriteState();
+
+        if (_showQueue)
+            await LoadQueue();
 
         await InvokeAsync(StateHasChanged);
     }

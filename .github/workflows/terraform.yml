@@ -1,0 +1,111 @@
+# Terraform CI: format, validate and test on every change to infra/, then a
+# read-only `plan` of prod once Azure access is configured.
+# Nothing here runs `apply`.
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.17.1"
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  # Needs no Azure access, so it runs on every PR, forks included.
+  validate:
+    name: fmt + validate + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+      # -backend=false: download providers and modules only. Validation checks
+      # syntax, types and references without touching state or Azure.
+      - name: terraform validate
+        run: |
+          for dir in bootstrap envs/prod; do
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      # Plans the module against mocked providers and checks its assertions.
+      - name: terraform test
+        working-directory: infra/modules/spotify-app
+        run: |
+          terraform init -backend=false -input=false
+          terraform test
+
+  # Compares the code with what's really in Azure. Skipped until the
+  # repository variables below exist (see infra/README.md, "CI").
+  plan:
+    name: plan (prod)
+    needs: validate
+    if: vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets the job request an OIDC token for Azure login
+    defaults:
+      run:
+        working-directory: infra/envs/prod
+    env:
+      # OIDC: GitHub vouches for this workflow and Entra ID trusts it through a
+      # federated credential, so no client secret is stored anywhere.
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_spotify_client_id: ${{ vars.SPOTIFY_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: >
+          terraform init -input=false
+          -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
+
+      # -lock=false: plan only reads, so don't hold the state lock (a PR plan
+      # shouldn't block someone's apply).
+      - name: terraform plan
+        run: |
+          terraform plan -input=false -lock=false -no-color -out=tfplan | tee plan.txt
+          {
+            echo "### Terraform plan: prod"
+            echo '```'
+            grep -E '^(Plan:|No changes\.)' plan.txt || true
+            echo '```'
+            echo '<details><summary>Full plan</summary>'
+            echo
+            echo '```'
+            cat plan.txt
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"

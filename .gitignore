@@ -429,3 +429,21 @@ FodyWeavers.xsd
 *.msp
 /SpotifyBlazor/Server/appsettings.json
 /SpotifyBlazor/Server/appsettings.Development.json
+
+# Terraform
+# State holds real resource IDs and any sensitive values: it lives in Azure
+# Storage (or bootstrap's local file), never in git. The lock file IS committed.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.secret.tfvars
+# Modules don't pin providers; the root modules (bootstrap, envs/*) do.
+infra/modules/**/.terraform.lock.hcl

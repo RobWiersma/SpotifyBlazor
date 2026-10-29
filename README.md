@@ -198,6 +198,18 @@ Then open **https://127.0.0.1:7151** and log in with Spotify.
 
 The app is published from Visual Studio to **Azure App Service**. Set the App Service stack to **.NET 8 (LTS)** under *Configuration → General settings* — a framework-dependent .NET 8 build won't start on an older runtime.
 
+### 🏗️ Infrastructure as code (Terraform)
+
+[`infra/`](infra/README.md) builds the Azure side with **Terraform** (`azurerm`): resource group, Linux App Service plan + Web App with a managed identity, **Key Vault** for the Spotify client secret and JWT key (as Key Vault references, so secret values never land in code or Terraform state), and Application Insights on Log Analytics. Dev runs locally; **prod** is built from a reusable module, and state is stored remotely in Azure Storage. A GitHub Actions workflow runs `fmt`, `validate`, a mocked `terraform test`, and a read-only `plan` of prod over OIDC.
+
+```powershell
+cd infra/envs/prod
+terraform init -backend-config="storage_account_name=<state account>"
+terraform plan -out tfplan
+```
+
+See [infra/README.md](infra/README.md) for bootstrap, secrets, CI setup and how each Terraform concept maps to the code.
+
 ---
 
 ## 🔍 How it works

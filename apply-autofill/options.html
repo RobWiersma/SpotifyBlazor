@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Apply Autofill settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>Apply Autofill</h1>
+  <p class="lead">Fill this in once. On an application (like LinkedIn Easy Apply), press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> or click the toolbar button on each step. Empty fields get filled and outlined green. Questions it can't answer get an orange outline. It never clicks Next or Submit. Your info is stored only in this browser.</p>
+
+  <form id="form">
+    <fieldset>
+      <legend>Contact</legend>
+      <div class="grid">
+        <label>First name<input name="firstName" autocomplete="given-name"></label>
+        <label>Last name<input name="lastName" autocomplete="family-name"></label>
+        <label>Email<input name="email" type="email"></label>
+        <label>Phone<input name="phone" type="tel" placeholder="2065551234"></label>
+        <label>Phone country code<input name="phoneCountry" placeholder="United States (+1)"></label>
+        <label>Street address<input name="address"></label>
+        <label>City<input name="city" placeholder="Seattle"></label>
+        <label>State<input name="state" placeholder="Washington"></label>
+        <label>ZIP / postal code<input name="zip"></label>
+        <label>Country<input name="country" placeholder="United States"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Links</legend>
+      <div class="grid">
+        <label>LinkedIn URL<input name="linkedin" type="url"></label>
+        <label>Website / portfolio<input name="website" type="url"></label>
+        <label>GitHub<input name="github" type="url"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Work</legend>
+      <div class="grid">
+        <label>Current job title<input name="currentTitle"></label>
+        <label>Current company<input name="currentCompany"></label>
+        <label>Desired salary<input name="salary" placeholder="95000"></label>
+        <label>Start date / notice period<input name="startDate" placeholder="2 weeks"></label>
+        <label>Highest education<input name="education" placeholder="Bachelor's Degree"></label>
+        <label>Default years of experience<input name="yearsDefault" type="number" min="0" placeholder="3"></label>
+      </div>
+      <label class="wide">Years per skill <span class="hint">one per line, <code>skill: years</code>. Used for "How many years of experience with …?" questions. Anything not listed uses the default above.</span>
+        <textarea name="skills" rows="5" placeholder="Python: 5&#10;SQL: 4&#10;Project management: 2&#10;Excel: 6"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Common yes/no questions</legend>
+      <div class="grid">
+        <label>Legally authorized to work here?<select name="workAuthorized"></select></label>
+        <label>Need visa sponsorship (now or future)?<select name="needsSponsorship"></select></label>
+        <label>Comfortable commuting / on-site?<select name="commute"></select></label>
+        <label>Willing to relocate?<select name="relocate"></select></label>
+        <label>Have a bachelor's degree?<select name="hasDegree"></select></label>
+        <label>OK with background check / drug test?<select name="backgroundCheck"></select></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Voluntary self-identification <span class="hint">optional. Leave blank to always answer these yourself. Type words that appear in the site's option, e.g. "decline".</span></legend>
+      <div class="grid">
+        <label>Gender<input name="gender"></label>
+        <label>Race / ethnicity<input name="ethnicity"></label>
+        <label>Veteran status<input name="veteran"></label>
+        <label>Disability<input name="disability"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Longer text</legend>
+      <label class="wide">Cover letter / summary <span class="hint">used for "cover letter", "summary" or "why do you…" boxes</span>
+        <textarea name="coverLetter" rows="5"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Custom answers</legend>
+      <label class="wide"><span class="hint">One per line: <code>words in the question =&gt; answer</code>. These are checked first, so they override everything above. Use <code>/regex/</code> for patterns. Lines starting with <code>#</code> are ignored.</span>
+        <textarea name="rules" rows="8" placeholder="# examples&#10;security clearance =&gt; No&#10;comfortable working remotely =&gt; Yes&#10;/years.*(react|javascript)/ =&gt; 4&#10;pronouns =&gt; they/them"></textarea>
+      </label>
+    </fieldset>
+
+    <div class="bar">
+      <button type="submit" class="primary">Save</button>
+      <span id="status" role="status"></span>
+      <span class="spacer"></span>
+      <button type="button" id="export">Export backup</button>
+      <label class="button">Import backup<input type="file" id="import" accept="application/json" hidden></label>
+    </div>
+  </form>
+</main>
+<script src="options.js"></script>
+</body>
+</html>

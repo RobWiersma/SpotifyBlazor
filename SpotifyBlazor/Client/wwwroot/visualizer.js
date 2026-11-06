@@ -6,7 +6,8 @@
 // Mic mode instead listens through the microphone and draws what it hears.
 // The audio is only measured in the browser, never recorded or sent anywhere.
 
-const FALLBACK = [[29, 185, 84], [127, 90, 240], [255, 255, 255]];
+// Spotify green, violet, hot pink
+const FALLBACK = [[29, 185, 84], [127, 90, 240], [255, 64, 160]];
 
 let canvas, ctx, resizeObserver, frame;
 let playing = false;
@@ -149,15 +150,10 @@ function draw(now) {
     const barW = slot * 0.62;
 
     ctx.clearRect(0, 0, w, h);
+    ctx.shadowBlur = 22 * dpr;
 
-    const gradient = ctx.createLinearGradient(0, h, 0, h - maxH);
-    gradient.addColorStop(0, rgba(colors[0], 0.95));
-    gradient.addColorStop(0.6, rgba(colors[1], 0.8));
-    gradient.addColorStop(1, rgba(colors[2], 0.35));
-
-    ctx.fillStyle = gradient;
-    ctx.shadowColor = rgba(colors[0], 0.6);
-    ctx.shadowBlur = 18 * dpr;
+    // The album's colors as hue/saturation/lightness, so each bar can shift its hue
+    const palette = colors.map(rgbToHsl);
 
     if (mic) {
         mic.analyser.getByteFrequencyData(mic.bins);
@@ -190,6 +186,23 @@ function draw(now) {
 
         const barH = Math.max(2 * dpr, bar.value * maxH);
         const bx = i * slot + (slot - barW) / 2;
+
+        // Color: the palette spread from the middle outwards, then a hue wave that drifts
+        // across the bars over time. Taller bars glow brighter. Full saturation keeps it vivid.
+        const d = Math.abs(x);
+        const [h1, s1, l1] = d < 0.5
+            ? mixHsl(palette[0], palette[1], d * 2)
+            : mixHsl(palette[1], palette[2], (d - 0.5) * 2);
+        const hue = h1 + 50 * d + 35 * Math.sin(t * speed * 0.4 + d * 4);
+        const sat = Math.max(s1, 0.85);
+        const light = Math.min(0.62, Math.max(0.45, l1)) + 0.1 * bar.value;
+
+        const fill = ctx.createLinearGradient(0, h, 0, h - barH);
+        fill.addColorStop(0, hsla(hue, sat, light, 0.95));
+        fill.addColorStop(1, hsla(hue + 40, sat, Math.min(0.85, light + 0.18), 0.9));
+
+        ctx.fillStyle = fill;
+        ctx.shadowColor = hsla(hue, sat, light, 0.75);
         roundedBar(bx, h - barH, barW, barH, Math.min(barW / 2, 6 * dpr));
     });
 }
@@ -268,9 +281,13 @@ function loadPalette(url) {
                             picked.push(c);
                     });
 
-                // Pad with lighter versions of what we found, or the fallback
-                while (picked.length < 3)
-                    picked.push(picked.length ? lighten(picked[0], 0.5 + 0.2 * picked.length) : FALLBACK[picked.length]);
+                // Few distinct colors (e.g. a mostly one-color cover): add the first one's
+                // hue rotated by thirds, so the bars still span a range of colors
+                while (picked.length < 3) {
+                    if (picked.length === 0) { picked.push(...FALLBACK); break; }
+                    const [hue, s, l] = rgbToHsl(picked[0]);
+                    picked.push(hslToRgb([hue + 120 * picked.length, Math.max(s, 0.8), l]));
+                }
 
                 resolve(picked);
             } catch {
@@ -282,8 +299,44 @@ function loadPalette(url) {
 }
 
 const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-const lighten = (c, amount) => c.map(v => v + (255 - v) * amount);
-const rgba = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a})`;
+const hsla = (h, s, l, a) => `hsla(${((h % 360) + 360) % 360}, ${s * 100}%, ${l * 100}%, ${a})`;
+
+// Blends two [hue, sat, light] colors, going the short way around the hue circle
+function mixHsl(a, b, f) {
+    let dh = b[0] - a[0];
+    if (dh > 180) dh -= 360;
+    if (dh < -180) dh += 360;
+    return [a[0] + dh * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+
+// [r, g, b] 0–255 → [hue 0–360, sat 0–1, light 0–1]
+function rgbToHsl([r, g, b]) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    const h = max === r ? (g - b) / d + (g < b ? 6 : 0)
+            : max === g ? (b - r) / d + 2
+            : (r - g) / d + 4;
+    return [h * 60, s, l];
+}
+
+function hslToRgb([h, s, l]) {
+    h = ((h % 360) + 360) % 360 / 360;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const channel = t => {
+        t = (t + 1) % 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+    };
+    return [channel(h + 1 / 3), channel(h), channel(h - 1 / 3)].map(v => v * 255);
+}
 
 function hash(text) {
     let h = 0;

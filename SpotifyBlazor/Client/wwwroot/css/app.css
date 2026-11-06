@@ -612,12 +612,16 @@ a {
     z-index: 1000;
 }
 
-/* Fullscreen container */
+/* Fullscreen container: exactly the space between the header (40px login bar + 42px
+   search box) and the player bar, matching .content-root's bottom padding, so the page
+   doesn't scroll. clip, not hidden: a hidden overflow can still be scrolled by the
+   browser (e.g. when a button near the bottom gets focus), which shoved the cover off the top. */
 .np-container {
     position: relative;
     width: 100%;
-    height: calc(100vh - 80px); /* leave room for playerbar */
-    overflow: hidden;
+    height: calc(100vh - 82px - var(--playerbar-height) - 20px);
+    height: calc(100dvh - 82px - var(--playerbar-height) - 20px);
+    overflow: clip;
 }
 
 /* Background blur */
@@ -660,8 +664,9 @@ a {
 
 /* Album art */
 .np-art {
-    width: 320px;
-    height: 320px;
+    /* Shrinks on short or narrow screens so title and controls still fit below it */
+    width: min(320px, 34vh, 70vw);
+    height: min(320px, 34vh, 70vw);
     border-radius: 12px;
     opacity: 0;
     transform: scale(0.95);
@@ -674,9 +679,62 @@ a {
 }
 
 /* Track info */
+/* Long titles (live versions, soundtracks) stop at two lines */
 .np-track-info h1 {
     margin-top: 20px;
-    font-size: 2.2rem;
+    padding: 0 16px;
+    font-size: clamp(1.3rem, 1rem + 1.6vw, 2.2rem);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Phones: tighter spacing so everything fits above the player bar */
+@media (max-width: 768px) {
+    .np-track-info h1 {
+        margin-top: 12px;
+    }
+
+    .np-progress {
+        width: 85%;
+        margin-top: 16px;
+    }
+
+    .np-controls {
+        margin-top: 16px;
+    }
+
+    /* Start at the top and scroll if it still doesn't fit, rather than centering
+       and cutting off the cover */
+    .np-content {
+        justify-content: flex-start;
+        padding-top: 16px;
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+
+    .np-art {
+        width: min(240px, 24vh, 60vw);
+        height: min(240px, 24vh, 60vw);
+    }
+
+    .np-lyrics-toggle {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+        .np-lyrics-toggle .np-btn {
+            font-size: 0.95rem;
+            padding: 6px 10px;
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+
+    .np-links {
+        margin-top: 12px;
+    }
 }
 
 .np-track-info h3 {
@@ -760,7 +818,10 @@ a {
     padding: 20px;
     background: rgba(0,0,0,0.75);
     backdrop-filter: blur(12px);
+    text-align: center;
+    overflow-x: hidden; /* the enlarged current line must not add a sideways scrollbar */
     overflow-y: auto; /* ⭐ REQUIRED */
+    scrollbar-width: none; /* it scrolls itself to the current line */
     overscroll-behavior: contain; /* ⭐ REQUIRED */
     -webkit-overflow-scrolling: touch;
     transform: translateY(100%);
@@ -774,17 +835,44 @@ a {
     opacity: 1;
 }
 
+.lyrics-panel::-webkit-scrollbar {
+    display: none;
+}
+
+/* Room after the last line, so the closing lines can scroll up to the middle too */
+.lyrics-panel::after {
+    content: "";
+    display: block;
+    height: 50%;
+}
+
 .lyrics-line {
     color: #bbb;
     font-size: 1rem;
-    padding: 4px 0;
+    padding: 4px 24px;
     transition: color 0.3s ease, transform 0.3s ease;
 }
 
+/* Grows from the middle, so with centered text it stays inside the panel */
 .active-line {
     color: #fff;
     font-weight: bold;
-    transform: scale(1.05);
+    transform: scale(1.08);
+    transform-origin: center;
+}
+
+/* Plain (untimed) lyrics: wrap long lines instead of running off the side */
+.lyrics-text {
+    white-space: pre-wrap;
+    font-family: inherit;
+    color: #ddd;
+}
+
+/* Inside the scrolling lyrics panel, keep ✕ pinned at the top instead of scrolling away */
+.lyrics-panel .lyrics-close {
+    position: sticky;
+    top: 0;
+    float: right;
 }
 
 .lyrics-overlay {

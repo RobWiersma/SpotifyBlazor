@@ -72,8 +72,8 @@
                         <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
                                 title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
                         <button class="np-btn" @onclick="CycleVisualizerStyle"
-                                title="Switch between bars along the bottom and a ring around the cover">
-                            @(_visualizerStyle == "ring" ? "◎ Ring" : "▮ Bars")
+                                title="Switch visualizer style">
+                            @VisualizerStyles.GetValueOrDefault(_visualizerStyle, "▮ Bars")
                         </button>
                     }
                 </div>
@@ -197,7 +197,19 @@
     private bool _visualizerRunning;
     private bool _micWanted; // saved choice: use the mic whenever the visualizer runs
     private bool _micOn;     // the mic is actually being listened to
-    private string _visualizerStyle = "bars"; // "bars" or "ring"
+    private string _visualizerStyle = "bars";
+
+    // Styles in button order, with their labels (the names match visualizer.js)
+    private static readonly Dictionary<string, string> VisualizerStyles = new()
+    {
+        ["bars"] = "▮ Bars",
+        ["ring"] = "◎ Ring",
+        ["wave"] = "〰️ Wave",
+        ["particles"] = "✨ Particles",
+        ["tunnel"] = "🌀 Tunnel",
+        ["mirror"] = "⇅ Mirror",
+        ["shatter"] = "🧩 Shatter",
+    };
     private string? _visualizerSentState; // last state sent to visualizer.js, to skip repeat updates
     private string? _visualizerLyricsFor; // which lyrics load visualizer.js has, for chorus detection
     private ElementReference _visualizerCanvas;
@@ -383,7 +395,8 @@
 
     private async Task CycleVisualizerStyle()
     {
-        _visualizerStyle = _visualizerStyle == "ring" ? "bars" : "ring";
+        var names = VisualizerStyles.Keys.ToList();
+        _visualizerStyle = names[(names.IndexOf(_visualizerStyle) + 1) % names.Count];
         await _visualizerModule!.InvokeVoidAsync("setStyle", _visualizerStyle);
     }
 

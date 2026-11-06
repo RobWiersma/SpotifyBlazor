@@ -25,7 +25,7 @@
 
 <p align="center">
   <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with yellow and green visualizer bars rising behind the controls" width="100%" />
-  <br/><sub><b>🌈 Visualizer</b> — bars or a ring around the cover in the album art's colors, hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
+  <br/><sub><b>🌈 Visualizer</b> — seven styles in the album art's colors, hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
 </p>
 
 <p align="center">
@@ -74,7 +74,7 @@
 - Device picker to hand playback between phone, desktop, speakers and browser
 - Synced lyrics on the Now Playing screen (timed lyrics from [LRCLIB](https://lrclib.net))
 - Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
-- 🌈 Visualizer: bars along the bottom or a ring around the pulsing cover (▮ Bars / ◎ Ring), in the album art's colors. Animated, or with 🎙️ Mic reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser). Repeated lines in the synced lyrics mark the chorus, where it gets bigger and brighter
+- 🌈 Visualizer in the album art's colors, with seven styles on one button: Bars, a Ring around the pulsing cover, flowing Waves, Particles bursting from the cover, a Tunnel of squares flying outwards, Mirror bars top and bottom, and Shatter, which breaks the cover into tiles on the beat. Animated, or with 🎙️ Mic reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser). Repeated lines in the synced lyrics mark the chorus, where it gets bigger and brighter
 
 </td>
 <td width="50%" valign="top">

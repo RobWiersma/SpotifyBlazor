@@ -24,9 +24,26 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with yellow and green visualizer bars rising behind the controls" width="100%" />
-  <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
+  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Daft Punk's Too Long / Steam Machine, with Ring, Particles and Tunnel layered: pink and violet bars circling the cover, sparks flying out, and a glowing square expanding behind it" width="100%" />
+  <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, mixed and matched (here Ring + Particles + Tunnel), hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
 </p>
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+  <img src="docs/screenshots/visualizer-wave.jpg" alt="Wave style: glowing lines flowing across the bottom of Now Playing" />
+  <br/><sub><b>Wave</b></sub>
+</td>
+<td width="33%" align="center" valign="top">
+  <img src="docs/screenshots/visualizer-mirror.jpg" alt="Mirror style: rainbow bars rising from the bottom and hanging from the top" />
+  <br/><sub><b>Mirror</b></sub>
+</td>
+<td width="33%" align="center" valign="top">
+  <img src="docs/screenshots/visualizer-shatter.jpg" alt="Shatter and Particles: the album cover split into tiles flying apart on the beat, with sparks around it" />
+  <br/><sub><b>Shatter</b> + Particles</sub>
+</td>
+</tr>
+</table>
 
 <p align="center">
   <img src="docs/screenshots/search.jpg" alt="Search results for Daft Punk: top result, songs, and artist cards" width="100%" />

@@ -11,6 +11,7 @@ public class SpotifyAuthService
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
     private readonly ILogger<SpotifyAuthService> _logger;
+    private readonly NotificationService _notifications;
 
     public string? AccessToken { get; private set; }
     public string? RefreshToken { get; private set; }
@@ -33,11 +34,12 @@ public class SpotifyAuthService
         LoginStateChanged?.Invoke(newState);
     }
 
-    public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger)
+    public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger, NotificationService notifications)
     {
         _http = http;
         _js = js;
         _logger = logger;
+        _notifications = notifications;
 
         _logger.LogWarning("DIAGNOSTIC: AuthService HttpClient hash = {Hash}", _http.GetHashCode());
     }
@@ -633,6 +635,27 @@ public class SpotifyAuthService
         _logger.LogInformation("PlayAsync: Resuming playback");
 
         await RefreshIfNeededAsync();
+
+        // Play buttons decide play vs pause from cached state, which can be up to 10s old.
+        // Resuming a player that's already playing gets 403 "Restriction violated", so check first.
+        var state = await GetNowPlayingAsync();
+        if (state?.IsPlaying == true)
+        {
+            _logger.LogInformation("PlayAsync: Already playing, nothing to resume");
+            await NotifyPlaybackChangedAsync();
+            return;
+        }
+
+        // A device with nothing loaded (e.g. the desktop app just opened) has no track to resume;
+        // Spotify flags that with disallows.resuming, and a bare play there also gets the 403
+        if (state?.Item == null && state?.Actions?.Disallows?.Resuming == true)
+        {
+            _logger.LogInformation("PlayAsync: Nothing loaded on {Device}", state.Device?.Name);
+            _notifications.ShowWarning("Nothing to resume",
+                $"Nothing is loaded on {state.Device?.Name ?? "this device"}. Pick a song to start playing.",
+                key: "play|nothing-loaded");
+            return;
+        }
 
         var res = await SendPlayAsync(null);
 

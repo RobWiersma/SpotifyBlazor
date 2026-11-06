@@ -24,6 +24,11 @@
 ## 📸 Screenshots
 
 <p align="center">
+  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with yellow and green visualizer bars rising behind the controls" width="100%" />
+  <br/><sub><b>🌈 Visualizer</b> — bars in the album art's colors, or reacting to your mic with 🎙️ Mic</sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/search.jpg" alt="Search results for Daft Punk: top result, songs, and artist cards" width="100%" />
   <br/><sub><b>Search</b> — top result, songs and artists, with filter chips</sub>
 </p>

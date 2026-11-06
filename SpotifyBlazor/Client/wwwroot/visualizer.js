@@ -143,13 +143,20 @@ function draw(now) {
     const kick = calm ? 0 : Math.pow(1 - beat, 6);
     const swell = 0.7 + 0.3 * Math.sin(t * 2 * Math.PI / 16);
 
-    const w = canvas.width, h = canvas.height;
     const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width;
+
+    // Stand the bars on top of the player bar: the Now Playing page runs past the bottom
+    // of the window, so the canvas's own bottom edge is hidden behind it
+    const playerBar = document.querySelector(".playerbar")?.getBoundingClientRect();
+    const box = canvas.getBoundingClientRect();
+    const floor = Math.min(box.bottom, playerBar?.top ?? innerHeight, innerHeight);
+    const h = Math.max(0, Math.min(canvas.height, (floor - box.top) * dpr));
     const maxH = h * 0.42;
     const slot = w / bars.length;
     const barW = slot * 0.62;
 
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, canvas.height);
     ctx.shadowBlur = 22 * dpr;
 
     // The album's colors as hue/saturation/lightness, so each bar can shift its hue
@@ -257,20 +264,29 @@ function loadPalette(url) {
                 sctx.drawImage(img, 0, 0, size, size);
                 const data = sctx.getImageData(0, 0, size, size).data;
 
-                // Count colors in coarse buckets, weighting vivid ones higher
-                const buckets = new Map();
-                for (let i = 0; i < data.length; i += 4) {
-                    const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
-                    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-                    const sat = max === 0 ? 0 : (max - min) / max;
-                    if (max < 40 || sat < 0.2) continue; // skip near-black and greys
+                // Count colors in coarse buckets, weighting vivid ones higher. Skip near-black
+                // and greys; a muted cover (sepia, washed-out) gets a second, looser pass, and
+                // the drawing turns its tints up to full saturation.
+                const countColors = minSat => {
+                    const buckets = new Map();
+                    for (let i = 0; i < data.length; i += 4) {
+                        const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+                        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                        const sat = max === 0 ? 0 : (max - min) / max;
+                        if (max < 40 || sat < minSat) continue;
 
-                    const key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4);
-                    const entry = buckets.get(key) ?? { r: 0, g: 0, b: 0, n: 0, score: 0 };
-                    entry.r += r; entry.g += g; entry.b += b; entry.n++;
-                    entry.score += 1 + sat * 2 + max / 255;
-                    buckets.set(key, entry);
-                }
+                        const key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4);
+                        const entry = buckets.get(key) ?? { r: 0, g: 0, b: 0, n: 0, score: 0 };
+                        entry.r += r; entry.g += g; entry.b += b; entry.n++;
+                        entry.score += 1 + sat * 2 + max / 255;
+                        buckets.set(key, entry);
+                    }
+                    return buckets;
+                };
+
+                let buckets = countColors(0.2);
+                if (buckets.size === 0)
+                    buckets = countColors(0.06);
 
                 const picked = [];
                 [...buckets.values()]

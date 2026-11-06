@@ -68,6 +68,7 @@
 - Now Playing with controls, seek, volume and queue
 - Device picker to hand playback between phone, desktop, speakers and browser
 - Synced lyrics on the Now Playing screen
+- Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
 
 </td>
 <td width="50%" valign="top">
@@ -180,6 +181,7 @@ Put these in `Server/appsettings.Development.json` or, better, `dotnet user-secr
 | `ConnectionStrings:callbackUri` | Redirect URI — must exactly match the one in the dashboard |
 | `Jwt:Key` / `Jwt:Issuer` / `Jwt:Audience` | App JWT signing and validation |
 | `ApplicationInsights:ConnectionString` | Telemetry destination |
+| `YouTube:ApiKey` | Optional. YouTube Data API v3 key for the 🎬 Video button (server only; free quota is about 100 searches a day, and results are cached) |
 
 > [!WARNING]
 > Keep secrets out of source control: use `dotnet user-secrets` locally and App Service application settings in Azure.

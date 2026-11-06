@@ -47,6 +47,11 @@ run "dev_free_tier" {
     condition     = startswith(azurerm_linux_web_app.this.app_settings["ConnectionStrings__clientSecret"], "@Microsoft.KeyVault(")
     error_message = "The Spotify client secret must be a Key Vault reference, never a literal."
   }
+
+  assert {
+    condition     = startswith(azurerm_linux_web_app.this.app_settings["YouTube__ApiKey"], "@Microsoft.KeyVault(")
+    error_message = "The YouTube API key must be a Key Vault reference, never a literal."
+  }
 }
 
 run "prod_defaults" {

@@ -17,7 +17,7 @@ output "callback_uri" {
 }
 
 output "key_vault_name" {
-  description = "Vault to put spotify-client-secret and jwt-signing-key into."
+  description = "Vault to put spotify-client-secret, jwt-signing-key and youtube-api-key into."
   value       = azurerm_key_vault.this.name
 }
 

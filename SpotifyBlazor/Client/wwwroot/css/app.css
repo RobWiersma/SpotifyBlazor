@@ -613,15 +613,20 @@ a {
 }
 
 /* Fullscreen container: exactly the space between the header (40px login bar + 42px
-   search box) and the player bar, matching .content-root's bottom padding, so the page
-   doesn't scroll. clip, not hidden: a hidden overflow can still be scrolled by the
-   browser (e.g. when a button near the bottom gets focus), which shoved the cover off the top. */
+   search box) and the player bar, so the page doesn't scroll. clip, not hidden: a hidden
+   overflow can still be scrolled by the browser (e.g. when a button near the bottom gets
+   focus), which shoved the cover off the top. */
 .np-container {
     position: relative;
     width: 100%;
-    height: calc(100vh - 82px - var(--playerbar-height) - 20px);
-    height: calc(100dvh - 82px - var(--playerbar-height) - 20px);
+    height: calc(100vh - 82px - var(--playerbar-height));
+    height: calc(100dvh - 82px - var(--playerbar-height));
     overflow: clip;
+}
+
+/* Other pages keep 20px of room above the player bar; Now Playing runs right down to it */
+.content-root:has(.np-container) {
+    padding-bottom: var(--playerbar-height);
 }
 
 /* Background blur */

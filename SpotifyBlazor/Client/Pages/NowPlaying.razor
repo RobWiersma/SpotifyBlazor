@@ -7,6 +7,7 @@
 @inject TelemetryService Telemetry
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject NotificationService Notifications
 
 
 <AnimatedPage>
@@ -20,6 +21,12 @@
 
             <!-- Background -->
             <div class="np-bg" style="background-image:url('@AlbumImage');"></div>
+
+            <!-- Visualizer: drawn by visualizer.js between the background and the content -->
+            @if (_showVisualizer)
+            {
+                <canvas class="np-visualizer" @ref="_visualizerCanvas"></canvas>
+            }
 
             <!-- Foreground -->
             <div class="np-content">
@@ -59,6 +66,12 @@
                 <div class="np-lyrics-toggle">
                     <button class="np-btn" @onclick="ToggleLyrics">🎤 Lyrics</button>
                     <button class="np-btn" @onclick="ShowVideo">🎬 Video</button>
+                    <button class="np-btn @(_showVisualizer ? "np-btn-on" : "")" @onclick="ToggleVisualizer">🌈 Visualizer</button>
+                    @if (_showVisualizer)
+                    {
+                        <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
+                                title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
+                    }
                 </div>
 
                 <!-- Navigation -->
@@ -157,6 +170,7 @@
     private string? _rawLyrics;
     private readonly List<TimedLine> _timedLyrics = new();
     private int _currentLineIndex = -1;
+    private string? _lyricsTrackId; // song the lyrics were loaded for
     private ElementReference _lyricsPanelRef;
     private IJSObjectReference? _lyricsModule;
 
@@ -174,8 +188,23 @@
 
     private string SiteOrigin => Nav.BaseUri.TrimEnd('/');
 
+    // visualizer state
+    private bool _showVisualizer;
+    private bool _visualizerRunning;
+    private bool _micWanted; // saved choice: use the mic whenever the visualizer runs
+    private bool _micOn;     // the mic is actually being listened to
+    private string? _visualizerSentState; // last state sent to visualizer.js, to skip repeat updates
+    private ElementReference _visualizerCanvas;
+    private IJSObjectReference? _visualizerModule;
+
 
     private int _apiCounter;
+
+    // Where Spotify said playback was, and when; the refresh loop counts on from there
+    private int _progressAtSync;
+    private DateTime _progressSyncedAt;
+
+    private const int LyricsLeadMs = 300;
 
     // Stops the refresh loop when leaving the page; otherwise each visit leaks
     // a loop that keeps polling Spotify and eats into the app's rate limit.
@@ -216,14 +245,16 @@
         Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
 
         _videoCallbacks?.Dispose();
+
+        // The animation loop would keep running on the removed canvas
+        if (_visualizerRunning)
+            _ = _visualizerModule!.InvokeVoidAsync("stop");
     }
 
     private async Task HandlePlaybackChangedAsync()
     {
         await ReloadNowPlaying();
-
-        if (_showLyrics)
-            await LoadLyricsAsync();
+        await EnsureLyricsAsync();
 
         await InvokeAsync(StateHasChanged);
     }
@@ -248,7 +279,15 @@
         {
             _lyricsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/lyrics.js");
             _ = RefreshLoop(_refreshCts.Token);
+
+            _visualizerModule = await JS.InvokeAsync<IJSObjectReference>("import", "/visualizer.js");
+            _showVisualizer = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer");
+            _micWanted = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer-mic");
+            if (_showVisualizer)
+                StateHasChanged(); // renders the canvas; the next render starts it
         }
+
+        await SyncVisualizerAsync();
 
         if (_attachVideoPlayer && _video is { Videos.Count: > 0 })
         {
@@ -259,6 +298,87 @@
             await _videoModule.InvokeVoidAsync("attach",
                 _videoFrameRef, _video.Videos.Select(v => v.VideoId).ToArray(), _videoCallbacks);
         }
+    }
+
+    // Starts, stops or updates visualizer.js to match the page. Runs after every render
+    // (the refresh loop renders each second), but only calls into JS when something changed.
+    private async Task SyncVisualizerAsync()
+    {
+        if (_visualizerModule == null)
+            return;
+
+        // The canvas ref has no Id until a render has actually drawn the canvas
+        var canDraw = _showVisualizer && _nowPlaying != null && !string.IsNullOrEmpty(_visualizerCanvas.Id);
+
+        if (!canDraw)
+        {
+            if (_visualizerRunning)
+            {
+                _visualizerRunning = false;
+                _visualizerSentState = null;
+                _micOn = false; // stop() releases the mic
+                await _visualizerModule.InvokeVoidAsync("stop");
+            }
+            return;
+        }
+
+        var options = new
+        {
+            imageUrl = AlbumImage,
+            playing = _nowPlaying!.IsPlaying,
+            trackId = _nowPlaying.Item?.Id
+        };
+
+        if (!_visualizerRunning)
+        {
+            _visualizerRunning = true;
+            _visualizerSentState = options.ToString();
+            await _visualizerModule.InvokeVoidAsync("start", _visualizerCanvas, options);
+
+            if (_micWanted)
+                await SetMicAsync(true);
+        }
+        else if (options.ToString() != _visualizerSentState)
+        {
+            _visualizerSentState = options.ToString();
+            await _visualizerModule.InvokeVoidAsync("update", options);
+        }
+    }
+
+    private async Task ToggleVisualizer()
+    {
+        _showVisualizer = !_showVisualizer;
+
+        if (_visualizerModule != null)
+            await _visualizerModule.InvokeVoidAsync("setEnabled", _showVisualizer);
+    }
+
+    private async Task ToggleMic()
+    {
+        _micWanted = !_micOn;
+        await _visualizerModule!.InvokeVoidAsync("setEnabled", _micWanted, "visualizer-mic");
+        await SetMicAsync(_micWanted);
+    }
+
+    private async Task SetMicAsync(bool on)
+    {
+        var result = await _visualizerModule!.InvokeAsync<string>("setMic", on);
+        _micOn = result == "on";
+
+        if (result is "denied" or "unavailable")
+        {
+            // Don't ask again on every visit
+            _micWanted = false;
+            await _visualizerModule.InvokeVoidAsync("setEnabled", false, "visualizer-mic");
+
+            Notifications.ShowWarning("Microphone not available",
+                result == "denied"
+                    ? "Firefox blocked the microphone. Allow it from the icon in the address bar, then click 🎙️ Mic again."
+                    : "No microphone was found. The visualizer is using its built-in animation.",
+                key: "visualizer|mic");
+        }
+
+        StateHasChanged();
     }
 
     // Called by videoplayer.js when a result won't play and it moves to the next one
@@ -284,44 +404,43 @@
     {
         while (!token.IsCancellationRequested)
         {
+            // Ticks 4x a second so lyric lines change on time; Spotify is still only asked every 10s
             try
             {
-                await Task.Delay(1000, token);
+                await Task.Delay(250, token);
             }
             catch (OperationCanceledException)
             {
                 return;
             }
 
-            if (_nowPlaying?.IsPlaying == true)
+            // Position = Spotify's last reported position + time since then, from the clock
+            // (adding a fixed step per tick drifts, since Task.Delay always runs a little long)
+            if (_nowPlaying?.IsPlaying == true && _nowPlaying.Item != null)
             {
-                _nowPlaying.ProgressMs += 1000;
-
-                if (_nowPlaying.ProgressMs > _nowPlaying.Item.DurationMs)
-                    _nowPlaying.ProgressMs = _nowPlaying.Item.DurationMs;
+                var elapsed = (int)(DateTime.UtcNow - _progressSyncedAt).TotalMilliseconds;
+                _nowPlaying.ProgressMs = Math.Min(_progressAtSync + elapsed, _nowPlaying.Item.DurationMs);
             }
 
             _apiCounter++;
-            if (_apiCounter >= 10)
+            if (_apiCounter >= 40)
             {
                 _apiCounter = 0;
                 await ReloadNowPlaying();
-
-                if (_showLyrics)
-                    await LoadLyricsAsync();
+                await EnsureLyricsAsync();
             }
 
             if (_timedLyrics.Count > 0 && _nowPlaying != null)
             {
-                var currentTime = TimeSpan.FromMilliseconds(_nowPlaying.ProgressMs);
+                // Light the line up just before it's sung, which reads as in time
+                var currentTime = TimeSpan.FromMilliseconds(_nowPlaying.ProgressMs + LyricsLeadMs);
 
-                for (int i = 0; i < _timedLyrics.Count; i++)
+                var index = _timedLyrics.FindLastIndex(l => l.Time <= currentTime);
+                if (index != _currentLineIndex)
                 {
-                    if (currentTime >= _timedLyrics[i].Time)
-                        _currentLineIndex = i;
+                    _currentLineIndex = index;
+                    await ScrollLyricsToCurrentAsync();
                 }
-
-                await ScrollLyricsToCurrentAsync();
             }
 
             StateHasChanged();
@@ -346,6 +465,8 @@
     private async Task ReloadNowPlaying()
     {
         _nowPlaying = await Auth.GetNowPlayingAsync();
+        _progressAtSync = _nowPlaying?.ProgressMs ?? 0;
+        _progressSyncedAt = DateTime.UtcNow;
         _artLoaded = true;
     }
 
@@ -386,10 +507,25 @@
     {
         _showLyrics = !_showLyrics;
 
-        if (_showLyrics)
-            await LoadLyricsAsync();
+        // Re-scroll to the current line when the panel opens again
+        _currentLineIndex = -1;
+        await EnsureLyricsAsync();
     }
 
+    // Loads lyrics when the panel is open and the song changed since the last load.
+    // (Reloading on every 10-second refresh used to reset the panel mid-song.)
+    private async Task EnsureLyricsAsync()
+    {
+        var trackId = _nowPlaying?.Item?.Id;
+        if (!_showLyrics || trackId == null || trackId == _lyricsTrackId)
+            return;
+
+        _lyricsTrackId = trackId;
+        await LoadLyricsAsync();
+    }
+
+    // Timed lyrics from LRCLIB (lrclib.net): free, no key, and allows browser calls.
+    // The old source (lyrics.ovh) has no timestamps, so lines were guessed at 3 seconds each.
     private async Task LoadLyricsAsync()
     {
         _lyricsReady = false;
@@ -397,86 +533,60 @@
         _timedLyrics.Clear();
         _currentLineIndex = -1;
 
-        var title = _nowPlaying?.Item?.Name;
-        var artist = _nowPlaying?.Item?.Artists?.FirstOrDefault()?.Name;
+        var item = _nowPlaying?.Item;
+        var title = item?.Name;
+        var artist = item?.Artists?.FirstOrDefault()?.Name;
 
         if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist))
         {
+            _rawLyrics = "Lyrics not available.";
             _lyricsReady = true;
             return;
         }
 
         try
         {
-            var url = $"https://api.lyrics.ovh/v1/{artist}/{title}";
-            var response = await new HttpClient().GetAsync(url);
+            // A plain HttpClient: a missing song is normal here and shouldn't pop an error toast
+            using var http = new HttpClient();
 
-            if (!response.IsSuccessStatusCode)
+            // Exact match first: album and duration (within a couple of seconds) pick the right version
+            var exactUrl = "https://lrclib.net/api/get" +
+                $"?artist_name={Uri.EscapeDataString(artist)}" +
+                $"&track_name={Uri.EscapeDataString(title)}" +
+                $"&album_name={Uri.EscapeDataString(item!.Album?.Name ?? "")}" +
+                $"&duration={item.DurationMs / 1000}";
+
+            var response = await http.GetAsync(exactUrl);
+            var lyrics = response.IsSuccessStatusCode
+                ? await response.Content.ReadFromJsonAsync<LrcLibLyrics>()
+                : null;
+
+            // No exact match (live, remastered and deluxe versions often differ): search instead,
+            // preferring a result that has timestamps and is close in length
+            if (lyrics == null)
             {
-                _rawLyrics = "Lyrics not available.";
-                _lyricsReady = true;
-                return;
+                var searchUrl = "https://lrclib.net/api/search" +
+                    $"?artist_name={Uri.EscapeDataString(artist)}" +
+                    $"&track_name={Uri.EscapeDataString(title)}";
+
+                var results = await http.GetFromJsonAsync<List<LrcLibLyrics>>(searchUrl) ?? new();
+                lyrics = results
+                    .OrderByDescending(r => !string.IsNullOrWhiteSpace(r.SyncedLyrics))
+                    .ThenBy(r => Math.Abs(r.Duration - item.DurationMs / 1000.0))
+                    .FirstOrDefault();
             }
 
-            var json = await response.Content.ReadFromJsonAsync<LyricsResponse>();
-            var raw = json?.Lyrics;
+            // A different-length version (e.g. studio cut of a live track) would be timed wrong
+            var sameVersion = lyrics != null && Math.Abs(lyrics.Duration - item.DurationMs / 1000.0) <= 10;
 
-            if (string.IsNullOrWhiteSpace(raw))
-            {
+            if (lyrics?.Instrumental == true)
+                _rawLyrics = "♪ Instrumental ♪";
+            else if (sameVersion && !string.IsNullOrWhiteSpace(lyrics?.SyncedLyrics))
+                ParseSyncedLyrics(lyrics.SyncedLyrics);
+            else if (!string.IsNullOrWhiteSpace(lyrics?.PlainLyrics))
+                _rawLyrics = lyrics.PlainLyrics; // no timestamps: show it all rather than guess
+            else
                 _rawLyrics = "Lyrics not found.";
-                _lyricsReady = true;
-                return;
-            }
-
-            var lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var line in lines)
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(
-                    line,
-        @"
-
-\[(\d{2}):(\d{2}\.\d{2})\]
-
-(.*)"
-                );
-
-                if (match.Success)
-                {
-                    var minutes = int.Parse(match.Groups[1].Value);
-                    var seconds = double.Parse(match.Groups[2].Value);
-                    var text = match.Groups[3].Value.Trim();
-
-                    _timedLyrics.Add(new TimedLine
-                    {
-                        Time = TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds),
-                        Text = text
-                    });
-                }
-            }
-
-            // ⭐ If no timestamps exist, generate synthetic ones
-            if (_timedLyrics.Count == 0)
-            {
-                const double secondsPerLine = 3.0; // tune this
-                double current = 0;
-
-                foreach (var line in lines)
-                {
-                    _timedLyrics.Add(new TimedLine
-                    {
-                        Time = TimeSpan.FromSeconds(current),
-                        Text = line.Trim()
-                    });
-
-                    current += secondsPerLine;
-                }
-            }
-
-            if (_timedLyrics.Count == 0)
-            {
-                _rawLyrics = raw; // fallback to static lyrics
-            }
         }
         catch
         {
@@ -485,6 +595,29 @@
 
         _lyricsReady = true;
         StateHasChanged();
+    }
+
+    // LRC format: one "[mm:ss.xx] text" per line. Empty text marks an instrumental gap.
+    private void ParseSyncedLyrics(string lrc)
+    {
+        foreach (var line in lrc.Split('\n'))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                line, @"^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$");
+
+            if (!match.Success)
+                continue;
+
+            var minutes = int.Parse(match.Groups[1].Value);
+            var seconds = double.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var text = match.Groups[3].Value.Trim();
+
+            _timedLyrics.Add(new TimedLine
+            {
+                Time = TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds),
+                Text = text.Length > 0 ? text : "♪"
+            });
+        }
     }
 
     private async Task ShowVideo()
@@ -569,9 +702,12 @@
         }
     }
 
-    private class LyricsResponse
+    private class LrcLibLyrics
     {
-        public string Lyrics { get; set; } = "";
+        public double Duration { get; set; }
+        public bool Instrumental { get; set; }
+        public string? PlainLyrics { get; set; }
+        public string? SyncedLyrics { get; set; }
     }
 
     private class TimedLine

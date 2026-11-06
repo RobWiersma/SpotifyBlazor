@@ -24,6 +24,11 @@
 ## 📸 Screenshots
 
 <p align="center">
+  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with yellow and green visualizer bars rising behind the controls" width="100%" />
+  <br/><sub><b>🌈 Visualizer</b> — bars in the album art's colors, or reacting to your mic with 🎙️ Mic</sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/search.jpg" alt="Search results for Daft Punk: top result, songs, and artist cards" width="100%" />
   <br/><sub><b>Search</b> — top result, songs and artists, with filter chips</sub>
 </p>
@@ -35,8 +40,8 @@
   <br/><sub><b>Album</b> — hover a row to play</sub>
 </td>
 <td width="37%" align="center" valign="top">
-  <img src="docs/screenshots/now-playing.jpg" alt="Now Playing screen with blurred album art background" />
-  <br/><sub><b>Now Playing</b> — controls and lyrics</sub>
+  <img src="docs/screenshots/now-playing.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with the synced lyrics panel open and the current line highlighted" />
+  <br/><sub><b>Now Playing</b> — synced lyrics</sub>
 </td>
 <td width="26%" align="center" valign="top" rowspan="2">
   <img src="docs/screenshots/mobile-album.jpg" alt="Album page on a phone" />
@@ -67,8 +72,9 @@
 - **Play in the browser** — the tab becomes a Spotify Connect device (*🌐 This browser*)
 - Now Playing with controls, seek, volume and queue
 - Device picker to hand playback between phone, desktop, speakers and browser
-- Synced lyrics on the Now Playing screen
+- Synced lyrics on the Now Playing screen (timed lyrics from [LRCLIB](https://lrclib.net))
 - Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
+- 🌈 Visualizer: bars in the album art's colors, animated or, with 🎙️ Mic, reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser)
 
 </td>
 <td width="50%" valign="top">

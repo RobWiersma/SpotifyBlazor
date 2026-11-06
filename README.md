@@ -105,27 +105,31 @@
 
 ## 🏗️ Architecture
 
-A hosted Blazor WebAssembly app: the ASP.NET Core server serves the client and keeps the Spotify client secret, while the browser talks to Spotify directly for everything else.
+A hosted Blazor WebAssembly app: the ASP.NET Core server serves the client and keeps the Spotify client secret and YouTube API key, while the browser talks to Spotify directly for everything else.
 
 ```mermaid
 flowchart LR
     subgraph Browser
         C["Blazor WASM client<br/>pages · player bar · toasts"]
         W["Web Playback SDK<br/>(This browser device)"]
+        V["YouTube embed<br/>(music video panel)"]
     end
 
     subgraph Azure["Azure App Service"]
-        S["ASP.NET Core server<br/>token exchange · JWT · telemetry"]
+        S["ASP.NET Core server<br/>token exchange · JWT · telemetry · video lookup"]
     end
 
     SA[("Spotify Accounts")]
     API[("Spotify Web API")]
+    YT[("YouTube Data API")]
     AI[("Application Insights")]
 
     C -- "/api/*" --> S
     S -- "code ⇄ tokens" --> SA
     S -- "/me (mint JWT)" --> API
+    S -- "video search (cached)" --> YT
     C -- "library · player · search" --> API
+    C -- "video ids" --> V
     W <--> API
     S --> AI
 ```

@@ -1338,9 +1338,9 @@ public class SpotifyAuthService
 
     public async Task<SpotifyPlayerState?> GetPlayerStateAsync()
     {
-        // Debug: show outgoing request
+        // Never log the access token: anyone who sees it (a screenshot, a shared log) can
+        // act as this Spotify account until it expires
         Console.WriteLine("GetPlayerStateAsync: Sending GET /v1/me/player");
-        Console.WriteLine($"Auth Header: Bearer {AccessToken}");
 
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.spotify.com/v1/me/player");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);

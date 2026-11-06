@@ -67,7 +67,7 @@
 - **Play in the browser** — the tab becomes a Spotify Connect device (*🌐 This browser*)
 - Now Playing with controls, seek, volume and queue
 - Device picker to hand playback between phone, desktop, speakers and browser
-- Synced lyrics on the Now Playing screen
+- Synced lyrics on the Now Playing screen (timed lyrics from [LRCLIB](https://lrclib.net))
 - Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
 - 🌈 Visualizer: bars in the album art's colors, animated or, with 🎙️ Mic, reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser)
 

@@ -7,6 +7,7 @@
 @inject TelemetryService Telemetry
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject NotificationService Notifications
 
 
 <AnimatedPage>
@@ -66,6 +67,11 @@
                     <button class="np-btn" @onclick="ToggleLyrics">🎤 Lyrics</button>
                     <button class="np-btn" @onclick="ShowVideo">🎬 Video</button>
                     <button class="np-btn @(_showVisualizer ? "np-btn-on" : "")" @onclick="ToggleVisualizer">🌈 Visualizer</button>
+                    @if (_showVisualizer)
+                    {
+                        <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
+                                title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
+                    }
                 </div>
 
                 <!-- Navigation -->
@@ -184,6 +190,8 @@
     // visualizer state
     private bool _showVisualizer;
     private bool _visualizerRunning;
+    private bool _micWanted; // saved choice: use the mic whenever the visualizer runs
+    private bool _micOn;     // the mic is actually being listened to
     private string? _visualizerSentState; // last state sent to visualizer.js, to skip repeat updates
     private ElementReference _visualizerCanvas;
     private IJSObjectReference? _visualizerModule;
@@ -268,7 +276,8 @@
             _ = RefreshLoop(_refreshCts.Token);
 
             _visualizerModule = await JS.InvokeAsync<IJSObjectReference>("import", "/visualizer.js");
-            _showVisualizer = await _visualizerModule.InvokeAsync<bool>("isEnabled");
+            _showVisualizer = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer");
+            _micWanted = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer-mic");
             if (_showVisualizer)
                 StateHasChanged(); // renders the canvas; the next render starts it
         }
@@ -302,6 +311,7 @@
             {
                 _visualizerRunning = false;
                 _visualizerSentState = null;
+                _micOn = false; // stop() releases the mic
                 await _visualizerModule.InvokeVoidAsync("stop");
             }
             return;
@@ -319,6 +329,9 @@
             _visualizerRunning = true;
             _visualizerSentState = options.ToString();
             await _visualizerModule.InvokeVoidAsync("start", _visualizerCanvas, options);
+
+            if (_micWanted)
+                await SetMicAsync(true);
         }
         else if (options.ToString() != _visualizerSentState)
         {
@@ -333,6 +346,34 @@
 
         if (_visualizerModule != null)
             await _visualizerModule.InvokeVoidAsync("setEnabled", _showVisualizer);
+    }
+
+    private async Task ToggleMic()
+    {
+        _micWanted = !_micOn;
+        await _visualizerModule!.InvokeVoidAsync("setEnabled", _micWanted, "visualizer-mic");
+        await SetMicAsync(_micWanted);
+    }
+
+    private async Task SetMicAsync(bool on)
+    {
+        var result = await _visualizerModule!.InvokeAsync<string>("setMic", on);
+        _micOn = result == "on";
+
+        if (result is "denied" or "unavailable")
+        {
+            // Don't ask again on every visit
+            _micWanted = false;
+            await _visualizerModule.InvokeVoidAsync("setEnabled", false, "visualizer-mic");
+
+            Notifications.ShowWarning("Microphone not available",
+                result == "denied"
+                    ? "Firefox blocked the microphone. Allow it from the icon in the address bar, then click 🎙️ Mic again."
+                    : "No microphone was found. The visualizer is using its built-in animation.",
+                key: "visualizer|mic");
+        }
+
+        StateHasChanged();
     }
 
     // Called by videoplayer.js when a result won't play and it moves to the next one

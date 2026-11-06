@@ -69,7 +69,7 @@
 - Device picker to hand playback between phone, desktop, speakers and browser
 - Synced lyrics on the Now Playing screen
 - Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
-- 🌈 Visualizer: animated bars in the album art's colors (generated motion, since Spotify's audio can't be analyzed in the browser)
+- 🌈 Visualizer: bars in the album art's colors, animated or, with 🎙️ Mic, reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser)
 
 </td>
 <td width="50%" valign="top">

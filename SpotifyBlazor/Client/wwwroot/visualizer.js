@@ -1,8 +1,10 @@
 // Now Playing visualizer: animated bars in the album art's colors.
 // Spotify's audio can't be analyzed in the browser (DRM, and the audio-analysis
-// API is closed to new apps), so the motion is generated, not measured: layered
+// API is closed to new apps), so by default the motion is generated: layered
 // sine "noise", a steady kick at a tempo picked from the track id, and slow
 // swells. It rises while playing and settles when paused.
+// Mic mode instead listens through the microphone and draws what it hears.
+// The audio is only measured in the browser, never recorded or sent anywhere.
 
 const FALLBACK = [[29, 185, 84], [127, 90, 240], [255, 255, 255]];
 
@@ -14,6 +16,10 @@ let bars = [];
 let colors = FALLBACK.map(c => [...c]);
 let targetColors = FALLBACK;
 let imageUrl;
+
+// Mic mode
+let mic;                    // { stream, audio, analyser, bins }
+let micPeak = 0.2;          // running loudness peak, so quiet and loud rooms both fill the bars
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -48,15 +54,56 @@ export function stop() {
     cancelAnimationFrame(frame);
     resizeObserver?.disconnect();
     canvas = ctx = resizeObserver = undefined;
+    stopMic();
 }
 
-// Remembers the on/off choice per browser; storage can be unavailable (private mode)
-export function isEnabled() {
-    try { return localStorage.getItem("visualizer") === "on"; } catch { return false; }
+// Turns mic mode on or off. Returns "on", "off", "denied" (permission refused)
+// or "unavailable" (no mic, or the page isn't on https/localhost).
+export async function setMic(on) {
+    if (!on) {
+        stopMic();
+        return "off";
+    }
+
+    if (mic) return "on";
+    if (!navigator.mediaDevices?.getUserMedia) return "unavailable";
+
+    try {
+        // Processing meant for voice calls would flatten the music, so turn it off
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+
+        const audio = new AudioContext();
+        const analyser = audio.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.6;
+        audio.createMediaStreamSource(stream).connect(analyser);
+
+        mic = { stream, audio, analyser, bins: new Uint8Array(analyser.frequencyBinCount) };
+        micPeak = 0.2;
+        return "on";
+    } catch (e) {
+        return e?.name === "NotAllowedError" ? "denied" : "unavailable";
+    }
 }
 
-export function setEnabled(on) {
-    try { localStorage.setItem("visualizer", on ? "on" : "off"); } catch { }
+function stopMic() {
+    if (!mic) return;
+
+    // Stopping the tracks releases the mic, so the browser's recording indicator goes away
+    mic.stream.getTracks().forEach(track => track.stop());
+    mic.audio.close();
+    mic = undefined;
+}
+
+// Remembers on/off choices per browser; storage can be unavailable (private mode)
+export function isEnabled(name = "visualizer") {
+    try { return localStorage.getItem(name) === "on"; } catch { return false; }
+}
+
+export function setEnabled(on, name = "visualizer") {
+    try { localStorage.setItem(name, on ? "on" : "off"); } catch { }
 }
 
 function resize() {
@@ -112,20 +159,31 @@ function draw(now) {
     ctx.shadowColor = rgba(colors[0], 0.6);
     ctx.shadowBlur = 18 * dpr;
 
+    if (mic) {
+        mic.analyser.getByteFrequencyData(mic.bins);
+        // Let the peak decay slowly so the bars rescale when the room gets quieter
+        micPeak = Math.max(micPeak * 0.997, 0.08);
+    }
+
     bars.forEach((bar, i) => {
         // Mirrored: the middle bars act like bass, louder and kicked harder
         const x = (i + 0.5) / bars.length * 2 - 1;
         const center = Math.pow(1 - Math.abs(x), 1.5);
 
-        const noise =
-            0.5 * Math.sin(t * speed * bar.f[0] * 2 + bar.p[0]) +
-            0.3 * Math.sin(t * speed * bar.f[1] * 2 + bar.p[1]) +
-            0.2 * Math.sin(t * speed * bar.f[2] * 2 + bar.p[2]);
+        let target;
+        if (mic) {
+            target = micLevel(Math.abs(x));
+        } else {
+            const noise =
+                0.5 * Math.sin(t * speed * bar.f[0] * 2 + bar.p[0]) +
+                0.3 * Math.sin(t * speed * bar.f[1] * 2 + bar.p[1]) +
+                0.2 * Math.sin(t * speed * bar.f[2] * 2 + bar.p[2]);
 
-        const target = level * swell * (
-            (0.25 + 0.45 * center) * (0.55 + 0.45 * noise) +
-            kick * (0.15 + 0.45 * center)
-        );
+            target = level * swell * (
+                (0.25 + 0.45 * center) * (0.55 + 0.45 * noise) +
+                kick * (0.15 + 0.45 * center)
+            );
+        }
 
         // Rise fast, fall slowly, like a real meter
         bar.value += (target - bar.value) * (target > bar.value ? 0.35 : 0.08);
@@ -134,6 +192,28 @@ function draw(now) {
         const bx = i * slot + (slot - barW) / 2;
         roundedBar(bx, h - barH, barW, barH, Math.min(barW / 2, 6 * dpr));
     });
+}
+
+// Bar height from the mic for a bar at distance d from the middle (0 middle … 1 edge).
+// The middle shows bass and the edges treble, spread on a log scale like hearing is.
+function micLevel(d) {
+    const { analyser, audio, bins } = mic;
+    const hzPerBin = audio.sampleRate / analyser.fftSize;
+
+    const lowHz = 40 * Math.pow(8000 / 40, d);
+    const highHz = 40 * Math.pow(8000 / 40, Math.min(1, d + 0.04));
+    const from = Math.max(1, Math.floor(lowHz / hzPerBin));
+    const to = Math.max(from, Math.ceil(highHz / hzPerBin));
+
+    let sum = 0;
+    for (let b = from; b <= to && b < bins.length; b++)
+        sum += bins[b];
+
+    // Treble is naturally quieter than bass, so tilt it up a little
+    const value = (sum / (to - from + 1) / 255) * (1 + d * 0.8);
+    micPeak = Math.max(micPeak, value);
+
+    return Math.pow(Math.min(1, value / micPeak), 1.4) * 0.95;
 }
 
 function roundedBar(x, y, w, h, r) {

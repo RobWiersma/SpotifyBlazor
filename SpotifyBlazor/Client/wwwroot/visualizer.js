@@ -174,7 +174,15 @@ export async function setMic(on) {
         analyser.smoothingTimeConstant = 0.2;
         audio.createMediaStreamSource(stream).connect(analyser);
 
-        mic = { stream, audio, analyser, bins: new Uint8Array(analyser.frequencyBinCount) };
+        // Treat anything quieter than -80 dB as silence (the default, -100 dB, counts the
+        // room's hiss as sound)
+        analyser.minDecibels = -80;
+
+        mic = {
+            stream, audio, analyser,
+            bins: new Uint8Array(analyser.frequencyBinCount),
+            floor: null // per-frequency noise floor, learned while listening
+        };
         micPeak = 0.2;
         return "on";
     } catch (e) {
@@ -305,7 +313,8 @@ function draw(now) {
     if (mic) {
         mic.analyser.getByteFrequencyData(mic.bins);
         // Let the peak decay slowly so the bars rescale when the room gets quieter
-        micPeak = Math.max(micPeak * 0.997, 0.08);
+        micPeak = Math.max(micPeak * 0.997, 0.2);
+        learnNoiseFloor();
     }
 
     const fs = { t, dt, speed, kick, swell, boost, calm, dpr, palette: colors.map(rgbToHsl) };
@@ -728,6 +737,20 @@ function drawShatter(fs) {
 
 // Bar height from the mic for a bar at distance d from the middle (0 middle … 1 edge).
 // The middle shows bass and the edges treble, spread on a log scale like hearing is.
+// Tracks each frequency's background level: drops quickly to the quietest moments and
+// creeps up only slowly, so steady noise is learned but music (which keeps dipping) isn't
+function learnNoiseFloor() {
+    const { bins } = mic;
+    if (!mic.floor) {
+        mic.floor = Float32Array.from(bins);
+        return;
+    }
+    for (let b = 0; b < bins.length; b++) {
+        const f = mic.floor[b];
+        mic.floor[b] = bins[b] < f ? f + (bins[b] - f) * 0.1 : f + (bins[b] - f) * 0.001;
+    }
+}
+
 function micLevel(d) {
     const { analyser, audio, bins } = mic;
     const hzPerBin = audio.sampleRate / analyser.fftSize;
@@ -737,9 +760,10 @@ function micLevel(d) {
     const from = Math.max(1, Math.floor(lowHz / hzPerBin));
     const to = Math.max(from, Math.ceil(highHz / hzPerBin));
 
+    // Only what rises above the steady background (fans, hum, hiss) counts
     let sum = 0;
     for (let b = from; b <= to && b < bins.length; b++)
-        sum += bins[b];
+        sum += Math.max(0, bins[b] - mic.floor[b] * 1.15 - 4);
 
     // Treble is naturally quieter than bass, so tilt it up a little
     const value = (sum / (to - from + 1) / 255) * (1 + d * 0.8);

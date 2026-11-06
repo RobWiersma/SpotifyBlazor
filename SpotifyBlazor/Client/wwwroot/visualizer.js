@@ -24,7 +24,7 @@ let level = 0;              // 0 paused … 1 playing, eased
 let bpm = 118;
 let bars = [];
 let ringBars = [];
-let style = "bars";
+let styles = new Set(["bars"]);
 let colors = FALLBACK.map(c => [...c]);
 let targetColors = FALLBACK;
 let imageUrl;
@@ -66,7 +66,7 @@ export function start(el, options) {
     stop();
 
     canvas = el;
-    style = getStyle();
+    styles = new Set(getStyles());
     ctx = canvas.getContext("2d");
 
     resizeObserver = new ResizeObserver(resize);
@@ -107,23 +107,26 @@ export function stop() {
     setCover(null);
 }
 
-// One of STYLES; remembered per browser
-export function getStyle() {
+// The selected styles (any of STYLES, drawn together); remembered per browser
+export function getStyles() {
     try {
-        const saved = localStorage.getItem("visualizer-style");
-        return STYLES.includes(saved) ? saved : "bars";
+        // "visualizer-style" held the single style picked before several were allowed
+        const saved = (localStorage.getItem("visualizer-styles") ?? localStorage.getItem("visualizer-style") ?? "")
+            .split(",").filter(s => STYLES.includes(s));
+        return saved.length ? saved : ["bars"];
     } catch {
-        return "bars";
+        return ["bars"];
     }
 }
 
-export function setStyle(name) {
-    style = STYLES.includes(name) ? name : "bars";
-    try { localStorage.setItem("visualizer-style", style); } catch { }
+export function setStyles(names) {
+    const picked = (names ?? []).filter(s => STYLES.includes(s));
+    styles = new Set(picked.length ? picked : ["bars"]);
+    try { localStorage.setItem("visualizer-styles", [...styles].join(",")); } catch { }
 
-    particles = [];
-    tunnelRings = [];
-    shards = [];
+    // Clear what turned-off styles left behind
+    if (!styles.has("particles")) particles = [];
+    if (!styles.has("tunnel")) tunnelRings = [];
     setCover(null);
 }
 
@@ -321,17 +324,33 @@ function draw(now) {
 
     fs.cover = coverBox(document.querySelector(".np-art"), box, dpr, fs);
 
-    let cover = null;
-    switch (style) {
-        case "ring": cover = drawRing(fs); break;
-        case "wave": drawWave(fs); break;
-        case "particles": drawParticles(fs); break;
-        case "tunnel": cover = drawTunnel(fs); break;
-        case "mirror": drawBars(fs, true); break;
-        case "shatter": cover = drawShatter(fs); break;
-        default: drawBars(fs, false);
+    // Every selected style, back to front. Mirror already includes the bottom bars, so
+    // with both picked the bars are only drawn (and moved) once.
+    const draws = {
+        tunnel: drawTunnel,
+        wave: drawWave,
+        particles: drawParticles,
+        bars: fs => styles.has("mirror") ? null : drawBars(fs, false),
+        mirror: fs => drawBars(fs, true),
+        ring: drawRing,
+        shatter: drawShatter
+    };
+
+    // Cover effects add up: the biggest pulse wins, and shatter hides it
+    const cover = {};
+    const shadowBlur = ctx.shadowBlur;
+    for (const [name, drawStyle] of Object.entries(draws)) {
+        if (!styles.has(name)) continue;
+
+        ctx.save();
+        ctx.shadowBlur = shadowBlur;
+        const effect = drawStyle(fs);
+        ctx.restore();
+
+        if (effect?.scale) cover.scale = Math.max(cover.scale ?? 0, effect.scale);
+        if (effect?.hidden) cover.hidden = true;
     }
-    setCover(cover);
+    setCover(cover.scale || cover.hidden ? cover : null);
 }
 
 // Where the album cover is, in canvas pixels (size ignores the pulse's scale)

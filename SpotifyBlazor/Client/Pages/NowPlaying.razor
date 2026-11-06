@@ -71,12 +71,26 @@
                     {
                         <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
                                 title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
-                        <button class="np-btn" @onclick="CycleVisualizerStyle"
-                                title="Switch visualizer style">
-                            @VisualizerStyles.GetValueOrDefault(_visualizerStyle, "▮ Bars")
+                        <button class="np-btn @(_showStylePicker ? "np-btn-on" : "")"
+                                @onclick="() => _showStylePicker = !_showStylePicker"
+                                title="Pick visualizer styles; several can be on at once">
+                            🎨 Styles (@_visualizerStyles.Count)
                         </button>
                     }
                 </div>
+
+                <!-- Visualizer styles: any combination, drawn together -->
+                @if (_showVisualizer && _showStylePicker)
+                {
+                    <div class="np-style-picker">
+                        @foreach (var (name, label) in VisualizerStyles)
+                        {
+                            <button class="np-btn @(_visualizerStyles.Contains(name) ? "np-btn-on" : "")"
+                                    aria-pressed="@_visualizerStyles.Contains(name)"
+                                    @onclick="() => ToggleVisualizerStyle(name)">@label</button>
+                        }
+                    </div>
+                }
 
                 <!-- Navigation -->
                 <div class="np-links">
@@ -197,9 +211,10 @@
     private bool _visualizerRunning;
     private bool _micWanted; // saved choice: use the mic whenever the visualizer runs
     private bool _micOn;     // the mic is actually being listened to
-    private string _visualizerStyle = "bars";
+    private List<string> _visualizerStyles = new() { "bars" };
+    private bool _showStylePicker;
 
-    // Styles in button order, with their labels (the names match visualizer.js)
+    // Styles in picker order, with their labels (the names match visualizer.js)
     private static readonly Dictionary<string, string> VisualizerStyles = new()
     {
         ["bars"] = "▮ Bars",
@@ -301,7 +316,7 @@
             _visualizerModule = await JS.InvokeAsync<IJSObjectReference>("import", "/visualizer.js");
             _showVisualizer = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer");
             _micWanted = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer-mic");
-            _visualizerStyle = await _visualizerModule.InvokeAsync<string>("getStyle");
+            _visualizerStyles = (await _visualizerModule.InvokeAsync<string[]>("getStyles")).ToList();
             if (_showVisualizer)
             {
                 await EnsureLyricsAsync(); // the chorus boost needs the lyric timings
@@ -393,11 +408,21 @@
         await EnsureLyricsAsync();
     }
 
-    private async Task CycleVisualizerStyle()
+    // Turns one style on or off; the last one stays on, since none would draw nothing
+    private async Task ToggleVisualizerStyle(string name)
     {
-        var names = VisualizerStyles.Keys.ToList();
-        _visualizerStyle = names[(names.IndexOf(_visualizerStyle) + 1) % names.Count];
-        await _visualizerModule!.InvokeVoidAsync("setStyle", _visualizerStyle);
+        if (_visualizerStyles.Contains(name))
+        {
+            if (_visualizerStyles.Count == 1)
+                return;
+            _visualizerStyles.Remove(name);
+        }
+        else
+        {
+            _visualizerStyles.Add(name);
+        }
+
+        await _visualizerModule!.InvokeVoidAsync("setStyles", _visualizerStyles);
     }
 
     private async Task ToggleMic()

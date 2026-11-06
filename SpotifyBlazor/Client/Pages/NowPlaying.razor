@@ -21,6 +21,12 @@
             <!-- Background -->
             <div class="np-bg" style="background-image:url('@AlbumImage');"></div>
 
+            <!-- Visualizer: drawn by visualizer.js between the background and the content -->
+            @if (_showVisualizer)
+            {
+                <canvas class="np-visualizer" @ref="_visualizerCanvas"></canvas>
+            }
+
             <!-- Foreground -->
             <div class="np-content">
 
@@ -59,6 +65,7 @@
                 <div class="np-lyrics-toggle">
                     <button class="np-btn" @onclick="ToggleLyrics">🎤 Lyrics</button>
                     <button class="np-btn" @onclick="ShowVideo">🎬 Video</button>
+                    <button class="np-btn @(_showVisualizer ? "np-btn-on" : "")" @onclick="ToggleVisualizer">🌈 Visualizer</button>
                 </div>
 
                 <!-- Navigation -->
@@ -174,6 +181,13 @@
 
     private string SiteOrigin => Nav.BaseUri.TrimEnd('/');
 
+    // visualizer state
+    private bool _showVisualizer;
+    private bool _visualizerRunning;
+    private string? _visualizerSentState; // last state sent to visualizer.js, to skip repeat updates
+    private ElementReference _visualizerCanvas;
+    private IJSObjectReference? _visualizerModule;
+
 
     private int _apiCounter;
 
@@ -216,6 +230,10 @@
         Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
 
         _videoCallbacks?.Dispose();
+
+        // The animation loop would keep running on the removed canvas
+        if (_visualizerRunning)
+            _ = _visualizerModule!.InvokeVoidAsync("stop");
     }
 
     private async Task HandlePlaybackChangedAsync()
@@ -248,7 +266,14 @@
         {
             _lyricsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/lyrics.js");
             _ = RefreshLoop(_refreshCts.Token);
+
+            _visualizerModule = await JS.InvokeAsync<IJSObjectReference>("import", "/visualizer.js");
+            _showVisualizer = await _visualizerModule.InvokeAsync<bool>("isEnabled");
+            if (_showVisualizer)
+                StateHasChanged(); // renders the canvas; the next render starts it
         }
+
+        await SyncVisualizerAsync();
 
         if (_attachVideoPlayer && _video is { Videos.Count: > 0 })
         {
@@ -259,6 +284,55 @@
             await _videoModule.InvokeVoidAsync("attach",
                 _videoFrameRef, _video.Videos.Select(v => v.VideoId).ToArray(), _videoCallbacks);
         }
+    }
+
+    // Starts, stops or updates visualizer.js to match the page. Runs after every render
+    // (the refresh loop renders each second), but only calls into JS when something changed.
+    private async Task SyncVisualizerAsync()
+    {
+        if (_visualizerModule == null)
+            return;
+
+        // The canvas ref has no Id until a render has actually drawn the canvas
+        var canDraw = _showVisualizer && _nowPlaying != null && !string.IsNullOrEmpty(_visualizerCanvas.Id);
+
+        if (!canDraw)
+        {
+            if (_visualizerRunning)
+            {
+                _visualizerRunning = false;
+                _visualizerSentState = null;
+                await _visualizerModule.InvokeVoidAsync("stop");
+            }
+            return;
+        }
+
+        var options = new
+        {
+            imageUrl = AlbumImage,
+            playing = _nowPlaying!.IsPlaying,
+            trackId = _nowPlaying.Item?.Id
+        };
+
+        if (!_visualizerRunning)
+        {
+            _visualizerRunning = true;
+            _visualizerSentState = options.ToString();
+            await _visualizerModule.InvokeVoidAsync("start", _visualizerCanvas, options);
+        }
+        else if (options.ToString() != _visualizerSentState)
+        {
+            _visualizerSentState = options.ToString();
+            await _visualizerModule.InvokeVoidAsync("update", options);
+        }
+    }
+
+    private async Task ToggleVisualizer()
+    {
+        _showVisualizer = !_showVisualizer;
+
+        if (_visualizerModule != null)
+            await _visualizerModule.InvokeVoidAsync("setEnabled", _showVisualizer);
     }
 
     // Called by videoplayer.js when a result won't play and it moves to the next one

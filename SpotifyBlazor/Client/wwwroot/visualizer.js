@@ -1,0 +1,212 @@
+// Now Playing visualizer: animated bars in the album art's colors.
+// Spotify's audio can't be analyzed in the browser (DRM, and the audio-analysis
+// API is closed to new apps), so the motion is generated, not measured: layered
+// sine "noise", a steady kick at a tempo picked from the track id, and slow
+// swells. It rises while playing and settles when paused.
+
+const FALLBACK = [[29, 185, 84], [127, 90, 240], [255, 255, 255]];
+
+let canvas, ctx, resizeObserver, frame;
+let playing = false;
+let level = 0;              // 0 paused … 1 playing, eased
+let bpm = 118;
+let bars = [];
+let colors = FALLBACK.map(c => [...c]);
+let targetColors = FALLBACK;
+let imageUrl;
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export function start(el, options) {
+    stop();
+
+    canvas = el;
+    ctx = canvas.getContext("2d");
+
+    resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(canvas);
+    resize();
+
+    update(options);
+    frame = requestAnimationFrame(draw);
+}
+
+// options: { imageUrl, playing, trackId }
+export function update(options) {
+    playing = !!options.playing;
+
+    if (options.trackId)
+        bpm = 90 + (hash(options.trackId) % 50); // 90–139, stable per track
+
+    if (options.imageUrl && options.imageUrl !== imageUrl) {
+        imageUrl = options.imageUrl;
+        loadPalette(imageUrl).then(p => { if (imageUrl === options.imageUrl) targetColors = p; });
+    }
+}
+
+export function stop() {
+    cancelAnimationFrame(frame);
+    resizeObserver?.disconnect();
+    canvas = ctx = resizeObserver = undefined;
+}
+
+// Remembers the on/off choice per browser; storage can be unavailable (private mode)
+export function isEnabled() {
+    try { return localStorage.getItem("visualizer") === "on"; } catch { return false; }
+}
+
+export function setEnabled(on) {
+    try { localStorage.setItem("visualizer", on ? "on" : "off"); } catch { }
+}
+
+function resize() {
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(canvas.clientWidth * dpr);
+    canvas.height = Math.round(canvas.clientHeight * dpr);
+
+    // About one bar per 18 CSS px, each with its own random wobble
+    const count = Math.max(24, Math.min(96, Math.round(canvas.clientWidth / 18)));
+    bars = Array.from({ length: count }, () => ({
+        value: 0,
+        f: [0.6 + Math.random() * 0.9, 1.7 + Math.random() * 1.6, 3.5 + Math.random() * 3],
+        p: [Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28]
+    }));
+}
+
+function draw(now) {
+    frame = requestAnimationFrame(draw);
+    if (!ctx || bars.length === 0) return;
+
+    const t = now / 1000;
+    const calm = reducedMotion();
+    const speed = calm ? 0.35 : 1;
+
+    level += ((playing ? 1 : 0) - level) * 0.04;
+
+    // Ease colors toward the current album's palette
+    for (let i = 0; i < 3; i++)
+        for (let c = 0; c < 3; c++)
+            colors[i][c] += (targetColors[i][c] - colors[i][c]) * 0.03;
+
+    // Kick: a sharp pulse on each beat. Swell: slow 16-second build and release.
+    const beat = (t * bpm / 60) % 1;
+    const kick = calm ? 0 : Math.pow(1 - beat, 6);
+    const swell = 0.7 + 0.3 * Math.sin(t * 2 * Math.PI / 16);
+
+    const w = canvas.width, h = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const maxH = h * 0.42;
+    const slot = w / bars.length;
+    const barW = slot * 0.62;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const gradient = ctx.createLinearGradient(0, h, 0, h - maxH);
+    gradient.addColorStop(0, rgba(colors[0], 0.95));
+    gradient.addColorStop(0.6, rgba(colors[1], 0.8));
+    gradient.addColorStop(1, rgba(colors[2], 0.35));
+
+    ctx.fillStyle = gradient;
+    ctx.shadowColor = rgba(colors[0], 0.6);
+    ctx.shadowBlur = 18 * dpr;
+
+    bars.forEach((bar, i) => {
+        // Mirrored: the middle bars act like bass, louder and kicked harder
+        const x = (i + 0.5) / bars.length * 2 - 1;
+        const center = Math.pow(1 - Math.abs(x), 1.5);
+
+        const noise =
+            0.5 * Math.sin(t * speed * bar.f[0] * 2 + bar.p[0]) +
+            0.3 * Math.sin(t * speed * bar.f[1] * 2 + bar.p[1]) +
+            0.2 * Math.sin(t * speed * bar.f[2] * 2 + bar.p[2]);
+
+        const target = level * swell * (
+            (0.25 + 0.45 * center) * (0.55 + 0.45 * noise) +
+            kick * (0.15 + 0.45 * center)
+        );
+
+        // Rise fast, fall slowly, like a real meter
+        bar.value += (target - bar.value) * (target > bar.value ? 0.35 : 0.08);
+
+        const barH = Math.max(2 * dpr, bar.value * maxH);
+        const bx = i * slot + (slot - barW) / 2;
+        roundedBar(bx, h - barH, barW, barH, Math.min(barW / 2, 6 * dpr));
+    });
+}
+
+function roundedBar(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// Picks three vivid, distinct colors from the album art. Reading pixels needs
+// the image served with CORS (Spotify's i.scdn.co does); otherwise use the fallback.
+function loadPalette(url) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onerror = () => resolve(FALLBACK);
+        img.onload = () => {
+            try {
+                const size = 32;
+                const small = document.createElement("canvas");
+                small.width = small.height = size;
+                const sctx = small.getContext("2d", { willReadFrequently: true });
+                sctx.drawImage(img, 0, 0, size, size);
+                const data = sctx.getImageData(0, 0, size, size).data;
+
+                // Count colors in coarse buckets, weighting vivid ones higher
+                const buckets = new Map();
+                for (let i = 0; i < data.length; i += 4) {
+                    const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+                    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                    const sat = max === 0 ? 0 : (max - min) / max;
+                    if (max < 40 || sat < 0.2) continue; // skip near-black and greys
+
+                    const key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4);
+                    const entry = buckets.get(key) ?? { r: 0, g: 0, b: 0, n: 0, score: 0 };
+                    entry.r += r; entry.g += g; entry.b += b; entry.n++;
+                    entry.score += 1 + sat * 2 + max / 255;
+                    buckets.set(key, entry);
+                }
+
+                const picked = [];
+                [...buckets.values()]
+                    .sort((a, b) => b.score - a.score)
+                    .map(e => [e.r / e.n, e.g / e.n, e.b / e.n])
+                    .forEach(c => {
+                        if (picked.length < 3 && picked.every(p => distance(p, c) > 80))
+                            picked.push(c);
+                    });
+
+                // Pad with lighter versions of what we found, or the fallback
+                while (picked.length < 3)
+                    picked.push(picked.length ? lighten(picked[0], 0.5 + 0.2 * picked.length) : FALLBACK[picked.length]);
+
+                resolve(picked);
+            } catch {
+                resolve(FALLBACK); // tainted canvas: the image had no CORS header
+            }
+        };
+        img.src = url;
+    });
+}
+
+const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const lighten = (c, amount) => c.map(v => v + (255 - v) * amount);
+const rgba = (c, a) => `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${a})`;
+
+function hash(text) {
+    let h = 0;
+    for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return h;
+}

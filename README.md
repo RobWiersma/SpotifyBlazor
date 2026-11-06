@@ -24,9 +24,26 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with yellow and green visualizer bars rising behind the controls" width="100%" />
-  <br/><sub><b>🌈 Visualizer</b> — bars in the album art's colors, or reacting to your mic with 🎙️ Mic</sub>
+  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Daft Punk's Too Long / Steam Machine, with Ring, Particles and Tunnel layered: pink and violet bars circling the cover, sparks flying out, and a glowing square expanding behind it" width="100%" />
+  <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, mixed and matched (here Ring + Particles + Tunnel), hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
 </p>
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+  <img src="docs/screenshots/visualizer-wave.jpg" alt="Wave style: glowing lines flowing across the bottom of Now Playing" />
+  <br/><sub><b>Wave</b></sub>
+</td>
+<td width="33%" align="center" valign="top">
+  <img src="docs/screenshots/visualizer-mirror.jpg" alt="Mirror style: rainbow bars rising from the bottom and hanging from the top" />
+  <br/><sub><b>Mirror</b></sub>
+</td>
+<td width="33%" align="center" valign="top">
+  <img src="docs/screenshots/visualizer-shatter.jpg" alt="Shatter and Particles: the album cover split into tiles flying apart on the beat, with sparks around it" />
+  <br/><sub><b>Shatter</b> + Particles</sub>
+</td>
+</tr>
+</table>
 
 <p align="center">
   <img src="docs/screenshots/search.jpg" alt="Search results for Daft Punk: top result, songs, and artist cards" width="100%" />
@@ -74,7 +91,7 @@
 - Device picker to hand playback between phone, desktop, speakers and browser
 - Synced lyrics on the Now Playing screen (timed lyrics from [LRCLIB](https://lrclib.net))
 - Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
-- 🌈 Visualizer: bars in the album art's colors, animated or, with 🎙️ Mic, reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser)
+- 🌈 Winamp style Visualizers in the album art's colors, with seven styles to mix and match under 🎨 Styles (several can be on at once): Bars, a Ring around the pulsing cover, flowing Waves, Particles bursting from the cover, a Tunnel of squares flying outwards, Mirror bars top and bottom, and Shatter, which breaks the cover into tiles on the beat. Animated, or with 🎙️ Mic reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser). Repeated lines in the synced lyrics mark the chorus, where it gets bigger and brighter
 
 </td>
 <td width="50%" valign="top">

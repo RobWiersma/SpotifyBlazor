@@ -903,6 +903,27 @@ a {
     justify-content: center;
 }
 
+/* Visualizer style picker: a row of on/off chips under the toggles */
+.np-style-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 560px;
+    margin-top: 10px;
+}
+
+    .np-style-picker .np-btn {
+        font-size: 0.9rem;
+        padding: 5px 10px;
+        border-radius: 8px;
+        opacity: 0.65;
+    }
+
+    .np-style-picker .np-btn-on {
+        opacity: 1;
+    }
+
 /* Music video: dims the page and centers a 16:9 player */
 .video-overlay {
     position: absolute;

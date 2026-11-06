@@ -360,9 +360,10 @@
         if (index < 0)
             index = 0;
 
+        // The position is within all liked songs, not just this page
         await Auth.PlayTrackInContextAsync(
             "spotify:collection:tracks",
-            index);
+            _offset + index);
     }
 
     private Task OnAlbumClicked(SpotifyTrack track)

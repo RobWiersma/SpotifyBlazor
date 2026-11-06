@@ -68,6 +68,7 @@
 - Now Playing with controls, seek, volume and queue
 - Device picker to hand playback between phone, desktop, speakers and browser
 - Synced lyrics on the Now Playing screen
+- Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
 
 </td>
 <td width="50%" valign="top">
@@ -132,8 +133,9 @@ flowchart LR
 | Tech | Used for |
 | --- | --- |
 | **Blazor WebAssembly** (.NET 8) | The whole UI, hosted by the server |
-| **ASP.NET Core** | Token exchange/refresh, JWT minting, telemetry, rate limiting |
+| **ASP.NET Core** | Token exchange/refresh, JWT minting, telemetry, rate limiting, music video lookup |
 | **Spotify Web API** | Library, search, player control |
+| **YouTube Data API + IFrame Player API** | Finding a song's music video, and skipping results that won't play outside youtube.com |
 | **Spotify Web Playback SDK** | Playing audio in the browser tab |
 | **Application Insights + Serilog** | Telemetry and logs |
 
@@ -180,6 +182,7 @@ Put these in `Server/appsettings.Development.json` or, better, `dotnet user-secr
 | `ConnectionStrings:callbackUri` | Redirect URI — must exactly match the one in the dashboard |
 | `Jwt:Key` / `Jwt:Issuer` / `Jwt:Audience` | App JWT signing and validation |
 | `ApplicationInsights:ConnectionString` | Telemetry destination |
+| `YouTube:ApiKey` | Optional. YouTube Data API v3 key for the 🎬 Video button (server only; free quota is about 100 searches a day, and results are cached) |
 
 > [!WARNING]
 > Keep secrets out of source control: use `dotnet user-secrets` locally and App Service application settings in Azure.
@@ -329,6 +332,10 @@ The server sends `Cache-Control: no-cache` for the app's own `.css`, `.js` and `
 | **Everything stops after about an hour** | Token refresh is failing. Check the server logs for `/api/spotify/refresh` errors (e.g. rate limiting or a changed client secret). |
 | **Login fails with "Spotify rate limit" / `429 QUOTA_EXCEEDED`** | The app's Client ID is out of Spotify API allowance. Close every open tab of the app (live and local share the quota), wait for the countdown or a few minutes, then log in again. See [Spotify rate limits](#-how-it-works). |
 | **Login fails with a 5xx from `/api/auth/spotify-login`** | The toast and the browser console show what Spotify's `/me` returned (e.g. 401 expired token, 403 user not on the app's allowlist). |
+| **`403 Restriction violated` when pressing play** | The active device is stuck with nothing loaded (common right after the desktop app opens). Close and reopen the Spotify app, or pick a song instead of pressing play. |
+| **🎬 Video says videos aren't set up** | `YouTube:ApiKey` is missing. Add it to `appsettings.Development.json` locally, or as the `YouTube__ApiKey` app setting (or `youtube-api-key` in Key Vault) in Azure, then restart. |
+| **🎬 Video shows "Watch on YouTube" instead of playing** | The video's owner blocks playback on other sites, and so did the next four results. Nothing to fix; the button opens it on youtube.com. |
+| **🎬 Video says it couldn't look up the video** | Usually the YouTube API's daily quota (about 100 searches) is used up; it resets at midnight Pacific. Server logs show the YouTube response. |
 | **Phone still shows the old layout after a publish** | The browser cached the old CSS. Reload once; if it persists, open the site in an Incognito tab or clear the site's cached files. |
 
 ---

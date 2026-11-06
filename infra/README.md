@@ -10,7 +10,7 @@ There's no hosted dev environment: dev is your machine (`dotnet run` with `dotne
 flowchart LR
     subgraph RG["rg-spotifyblazor-prod"]
         ASP["App Service plan<br/>(Linux, F1 free tier)"] --> APP["Linux Web App<br/>.NET 8 · managed identity"]
-        KV["Key Vault<br/>spotify-client-secret<br/>jwt-signing-key"]
+        KV["Key Vault<br/>spotify-client-secret<br/>jwt-signing-key<br/>youtube-api-key"]
         AI["Application Insights"] --> LAW["Log Analytics"]
     end
     APP -- "Key Vault references<br/>(Secrets User role)" --> KV
@@ -103,6 +103,9 @@ az keyvault secret set --vault-name $kv --name spotify-client-secret --value "<S
 $bytes = New-Object byte[] 48
 [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
 az keyvault secret set --vault-name $kv --name jwt-signing-key --value ([Convert]::ToBase64String($bytes)) --output none
+
+# Optional: enables the 🎬 Video button. Without it the button says videos aren't set up.
+az keyvault secret set --vault-name $kv --name youtube-api-key --value "<YouTube Data API v3 key>" --output none
 
 az webapp restart -g (terraform output -raw resource_group_name) -n (terraform output -raw web_app_name)
 ```

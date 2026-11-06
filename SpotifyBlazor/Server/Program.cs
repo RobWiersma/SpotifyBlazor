@@ -1,6 +1,7 @@
 using Microsoft.ApplicationInsights;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Serilog.Core;
 using SpotifyBlazor.Shared.Models;
@@ -25,6 +26,9 @@ builder.Services.AddRazorPages();
 
 // HttpClient factory
 builder.Services.AddHttpClient();
+
+// Caches YouTube lookups: each search costs 100 of the 10,000 daily quota units
+builder.Services.AddMemoryCache();
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"];
@@ -123,6 +127,17 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // Steady limiter for music video lookups (protects the YouTube quota)
+    options.AddPolicy<string>("VideoSteady", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
             }));
 });
 
@@ -374,6 +389,73 @@ app.MapPost("/api/telemetry", async (
 .RequireAuthorization()
 .RequireRateLimiting("TelemetryBurst")
 .RequireRateLimiting("TelemetrySteady");
+
+// MUSIC VIDEO LOOKUP: finds the track's video on YouTube. The API key stays on the server.
+app.MapGet("/api/video", async (
+    string artist,
+    string track,
+    IConfiguration config,
+    IHttpClientFactory httpFactory,
+    IMemoryCache cache,
+    ILogger<Program> logger) =>
+{
+    var apiKey = config["YouTube:ApiKey"];
+
+    // An unresolved Key Vault reference (secret not created yet) arrives as the literal reference string
+    if (string.IsNullOrWhiteSpace(apiKey) || apiKey.StartsWith("@Microsoft.KeyVault("))
+        return Results.Problem("Music videos aren't set up: YouTube:ApiKey is missing.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    var cacheKey = $"video:{artist.Trim().ToLowerInvariant()}|{track.Trim().ToLowerInvariant()}";
+    if (cache.TryGetValue(cacheKey, out VideoLookup? cached))
+        return Results.Ok(cached);
+
+    var query = Uri.EscapeDataString($"{artist} {track} official music video");
+
+    // Category 10 is Music. Five results cost the same 100 units as one, and give the player
+    // fallbacks: label videos that block other sites often fail, and the client then tries the next.
+    // No videoEmbeddable filter, so the official video stays first for the "Watch on YouTube" link.
+    using var request = new HttpRequestMessage(HttpMethod.Get,
+        "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5" +
+        $"&videoCategoryId=10&q={query}");
+
+    // The key goes in a header, not the URL, so HttpClient's request logging never records it
+    request.Headers.Add("X-Goog-Api-Key", apiKey);
+
+    using var response = await httpFactory.CreateClient().SendAsync(request);
+
+    if (!response.IsSuccessStatusCode)
+    {
+        // 403 here usually means today's quota is used up
+        logger.LogError("VIDEO → YouTube search returned {Status}: {Body}",
+            (int)response.StatusCode, await response.Content.ReadAsStringAsync());
+        return Results.Problem("Couldn't reach YouTube to find the video.",
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+
+    using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+
+    var result = new VideoLookup(new List<VideoCandidate>());
+    if (json.RootElement.TryGetProperty("items", out var items))
+    {
+        foreach (var item in items.EnumerateArray())
+        {
+            var snippet = item.GetProperty("snippet");
+            result.Videos.Add(new VideoCandidate(
+                item.GetProperty("id").GetProperty("videoId").GetString()!,
+                // Titles come HTML-encoded (&amp;, &#39;)
+                System.Net.WebUtility.HtmlDecode(snippet.GetProperty("title").GetString() ?? ""),
+                snippet.GetProperty("channelTitle").GetString() ?? ""));
+        }
+    }
+
+    // Misses expire sooner, in case the video shows up later
+    cache.Set(cacheKey, result, result.Videos.Count == 0 ? TimeSpan.FromHours(6) : TimeSpan.FromDays(7));
+
+    return Results.Ok(result);
+})
+.RequireAuthorization()
+.RequireRateLimiting("VideoSteady");
 
 app.MapGet("/env", (IConfiguration config) =>
 {

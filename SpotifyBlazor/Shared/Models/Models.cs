@@ -666,6 +666,11 @@ namespace SpotifyBlazor.Shared.Models
 
     public record TelemetryEvent(string Level, string Message, string? Context, string? ClientTime, string? ClientVersion, string? Page, string? Component, string? Action, double? DurationMs);
 
+    // Result of /api/video: YouTube's top matches, best first. Empty when nothing matched.
+    public record VideoLookup(List<VideoCandidate> Videos);
+
+    public record VideoCandidate(string VideoId, string Title, string Channel);
+
     public class SpotifyDeviceResponse
     {
         public List<SpotifyDevice> Devices { get; set; } = new List<SpotifyDevice>();

@@ -146,6 +146,7 @@ resource "azurerm_linux_web_app" "this" {
     # managed identity. Only the reference string is in Terraform and state.
     "ConnectionStrings__clientSecret" = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.this.name};SecretName=spotify-client-secret)"
     "Jwt__Key"                        = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.this.name};SecretName=jwt-signing-key)"
+    "YouTube__ApiKey"                 = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.this.name};SecretName=youtube-api-key)"
 
     "Jwt__Issuer"   = local.site_url
     "Jwt__Audience" = local.site_url

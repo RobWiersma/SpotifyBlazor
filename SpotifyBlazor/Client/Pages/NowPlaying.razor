@@ -6,6 +6,7 @@
 @inject NavigationManager Nav
 @inject TelemetryService Telemetry
 @inject IJSRuntime JS
+@inject HttpClient Http
 
 
 <AnimatedPage>
@@ -54,9 +55,10 @@
                     <button class="np-btn" @onclick="NextTrack">⏭</button>
                 </div>
 
-                <!-- Lyrics toggle -->
+                <!-- Lyrics and video toggles -->
                 <div class="np-lyrics-toggle">
                     <button class="np-btn" @onclick="ToggleLyrics">🎤 Lyrics</button>
+                    <button class="np-btn" @onclick="ShowVideo">🎬 Video</button>
                 </div>
 
                 <!-- Navigation -->
@@ -98,6 +100,49 @@
                 </div>
             }
 
+            <!-- Music video panel -->
+            @if (_showVideo)
+            {
+                <div class="video-overlay" @onclick="HideVideo"></div>
+
+                <div class="video-panel" @onclick:stopPropagation>
+                    <div class="lyrics-close" @onclick="HideVideo">✕</div>
+
+                    @if (_video is { Videos.Count: > 0 } && _videosBlocked)
+                    {
+                        <!-- Every result blocks other sites; youtube.com itself can still play them -->
+                        <div class="video-blocked">
+                            <div>The video's owner only allows it to play on YouTube.</div>
+                            <a class="np-btn" target="_blank" rel="noopener"
+                               href="https://www.youtube.com/watch?v=@_video.Videos[0].VideoId">▶ Watch on YouTube</a>
+                            <div class="video-caption">@_video.Videos[0].Title · @_video.Videos[0].Channel</div>
+                        </div>
+                    }
+                    else if (_video is { Videos.Count: > 0 })
+                    {
+                        var current = _video.Videos[_videoIndex];
+
+                        <!-- youtube-nocookie: YouTube's privacy-enhanced embed, no tracking cookies until play.
+                             src stays on the first result; videoplayer.js swaps videos inside the player.
+                             enablejsapi lets videoplayer.js hear playback errors. YouTube refuses embeds
+                             whose request has no referrer (error 153), so send the site's origin. -->
+                        <div class="video-frame">
+                            <iframe @ref="_videoFrameRef"
+                                    src="https://www.youtube-nocookie.com/embed/@_video.Videos[0].VideoId?autoplay=1&rel=0&enablejsapi=1&origin=@Uri.EscapeDataString(SiteOrigin)"
+                                    title="@current.Title"
+                                    referrerpolicy="strict-origin-when-cross-origin"
+                                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                    allowfullscreen></iframe>
+                        </div>
+                        <div class="video-caption">@current.Title · @current.Channel</div>
+                    }
+                    else
+                    {
+                        <div class="lyrics-loading">@(_videoMessage ?? "Finding the video…")</div>
+                    }
+                </div>
+            }
+
         </div>
     }
 </AnimatedPage>
@@ -114,6 +159,20 @@
     private int _currentLineIndex = -1;
     private ElementReference _lyricsPanelRef;
     private IJSObjectReference? _lyricsModule;
+
+    // video state
+    private bool _showVideo;
+    private VideoLookup? _video;
+    private int _videoIndex;         // which search result is playing
+    private bool _videosBlocked;     // every result refused to play here
+    private bool _attachVideoPlayer; // a new iframe is rendering; hook videoplayer.js up after render
+    private string? _videoMessage;
+    private bool _pausedForVideo; // resume Spotify on close only if we paused it
+    private ElementReference _videoFrameRef;
+    private IJSObjectReference? _videoModule;
+    private DotNetObjectReference<NowPlaying>? _videoCallbacks;
+
+    private string SiteOrigin => Nav.BaseUri.TrimEnd('/');
 
 
     private int _apiCounter;
@@ -155,6 +214,8 @@
 
         Auth.LoginStateChanged -= HandleLoginStateChanged;
         Auth.OnPlaybackChanged -= HandlePlaybackChangedAsync;
+
+        _videoCallbacks?.Dispose();
     }
 
     private async Task HandlePlaybackChangedAsync()
@@ -188,6 +249,35 @@
             _lyricsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/lyrics.js");
             _ = RefreshLoop(_refreshCts.Token);
         }
+
+        if (_attachVideoPlayer && _video is { Videos.Count: > 0 })
+        {
+            _attachVideoPlayer = false;
+            _videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/videoplayer.js");
+            _videoCallbacks ??= DotNetObjectReference.Create(this);
+
+            await _videoModule.InvokeVoidAsync("attach",
+                _videoFrameRef, _video.Videos.Select(v => v.VideoId).ToArray(), _videoCallbacks);
+        }
+    }
+
+    // Called by videoplayer.js when a result won't play and it moves to the next one
+    [JSInvokable]
+    public void OnVideoChanged(int index)
+    {
+        if (_video == null || index >= _video.Videos.Count)
+            return;
+
+        _videoIndex = index;
+        StateHasChanged();
+    }
+
+    // Called by videoplayer.js when none of the results will play outside youtube.com
+    [JSInvokable]
+    public void OnAllVideosBlocked()
+    {
+        _videosBlocked = true;
+        StateHasChanged();
     }
 
     private async Task RefreshLoop(CancellationToken token)
@@ -395,6 +485,88 @@
 
         _lyricsReady = true;
         StateHasChanged();
+    }
+
+    private async Task ShowVideo()
+    {
+        var title = _nowPlaying?.Item?.Name;
+        var artist = _nowPlaying?.Item?.Artists?.FirstOrDefault()?.Name;
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist))
+            return;
+
+        _showLyrics = false;
+        _showVideo = true;
+        _video = null;
+        _videoIndex = 0;
+        _videosBlocked = false;
+        _videoMessage = null;
+
+        // Start loading YouTube's player API now, alongside the search
+        _videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/videoplayer.js");
+        var apiLoading = _videoModule.InvokeVoidAsync("loadApi").AsTask();
+
+        // Stop Spotify so the two don't play over each other
+        if (_nowPlaying?.IsPlaying == true)
+        {
+            await Auth.PauseAsync();
+            _nowPlaying.IsPlaying = false;
+            _pausedForVideo = true;
+        }
+
+        try
+        {
+            // Failures already show a toast (ErrorNotificationHandler); the panel just says so too
+            var response = await Http.GetAsync(
+                $"/api/video?artist={Uri.EscapeDataString(artist)}&track={Uri.EscapeDataString(title)}");
+
+            if (!response.IsSuccessStatusCode)
+                _videoMessage = "Couldn't look up the video.";
+            else
+            {
+                var video = await response.Content.ReadFromJsonAsync<VideoLookup>();
+                if (video is not { Videos.Count: > 0 })
+                    _videoMessage = "No music video found for this song.";
+                else
+                {
+                    // Without the API (blocked by an extension, say) the first video still plays,
+                    // just with no skipping past blocked ones
+                    try
+                    {
+                        await apiLoading;
+                        _attachVideoPlayer = true;
+                    }
+                    catch (JSException) { }
+
+                    _video = video;
+                }
+            }
+        }
+        catch
+        {
+            _videoMessage = "Couldn't look up the video.";
+        }
+
+        await Telemetry.TrackAsync(
+            "Info",
+            $"Music video opened: {title}",
+            context: _video?.Videos.FirstOrDefault()?.VideoId ?? _videoMessage,
+            page: "NowPlayingPage",
+            component: "NowPlaying",
+            action: "VideoOpened"
+        );
+    }
+
+    private async Task HideVideo()
+    {
+        // Removing the iframe stops the video
+        _showVideo = false;
+        _video = null;
+
+        if (_pausedForVideo)
+        {
+            _pausedForVideo = false;
+            await Auth.PlayAsync();
+        }
     }
 
     private class LyricsResponse

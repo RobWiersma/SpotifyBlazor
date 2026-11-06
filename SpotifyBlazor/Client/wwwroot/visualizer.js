@@ -161,15 +161,17 @@ export async function setMic(on) {
     if (!navigator.mediaDevices?.getUserMedia) return "unavailable";
 
     try {
-        // Processing meant for voice calls would flatten the music, so turn it off
+        // Processing meant for voice calls would flatten the music (and adds delay), so
+        // turn it off, and ask for the smallest input buffer the device allows
         const stream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, latency: 0 }
         });
 
-        const audio = new AudioContext();
+        const audio = new AudioContext({ latencyHint: "interactive" });
         const analyser = audio.createAnalyser();
         analyser.fftSize = 1024;
-        analyser.smoothingTimeConstant = 0.6;
+        // Little smoothing here: the bars already ease, and both together lagged behind the music
+        analyser.smoothingTimeConstant = 0.2;
         audio.createMediaStreamSource(stream).connect(analyser);
 
         mic = { stream, audio, analyser, bins: new Uint8Array(analyser.frequencyBinCount) };
@@ -421,8 +423,11 @@ function stepBar(bar, x, { t, speed, kick, swell, boost }) {
     }
     target = Math.min(1.25, target * boost);
 
-    // Rise fast, fall slowly, like a real meter
-    bar.value += (target - bar.value) * (target > bar.value ? 0.35 : 0.08);
+    // Rise fast, fall slowly, like a real meter. With the mic, jump almost straight to
+    // what it hears so hits land on time.
+    const rise = mic ? 0.8 : 0.35;
+    const fall = mic ? 0.15 : 0.08;
+    bar.value += (target - bar.value) * (target > bar.value ? rise : fall);
 }
 
 // Color for a bar at distance d from the bass end: the palette spread outwards, then a hue

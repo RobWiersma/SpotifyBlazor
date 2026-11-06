@@ -40,8 +40,8 @@
   <br/><sub><b>Album</b> — hover a row to play</sub>
 </td>
 <td width="37%" align="center" valign="top">
-  <img src="docs/screenshots/now-playing.jpg" alt="Now Playing screen with blurred album art background" />
-  <br/><sub><b>Now Playing</b> — controls and lyrics</sub>
+  <img src="docs/screenshots/now-playing.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with the synced lyrics panel open and the current line highlighted" />
+  <br/><sub><b>Now Playing</b> — synced lyrics</sub>
 </td>
 <td width="26%" align="center" valign="top" rowspan="2">
   <img src="docs/screenshots/mobile-album.jpg" alt="Album page on a phone" />

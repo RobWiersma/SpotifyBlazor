@@ -316,7 +316,7 @@ function draw(now) {
     if (mic) {
         // Let the peak decay slowly so the bars rescale when the music gets quieter; the
         // minimum keeps leftover noise from being stretched to full height
-        micPeak = Math.max(micPeak * 0.997, 0.12);
+        micPeak = Math.max(micPeak * 0.997, 0.08);
         readMic();
     }
 
@@ -745,7 +745,7 @@ const MIC_SLOTS = 48;
 // Reads the mic and keeps, per band, an estimate of the room's steady background (fans,
 // PC hum, hiss): its usual level and how much it normally wobbles. Only sound that clearly
 // rises above that counts. The estimate sinks quickly in quiet moments and rises slowly,
-// so steady noise is learned within a few seconds while the music's peaks stay visible.
+// so steady noise is learned (within ~15s if it gets louder) without soaking up the music.
 function readMic() {
     const { analyser, audio, bins } = mic;
     analyser.getByteFrequencyData(bins);
@@ -773,14 +773,14 @@ function readMic() {
             noise.frames = 0;
         }
 
-        const above = Math.max(0, level - noise.mean - 2.5 * noise.dev - 6);
+        const above = Math.max(0, level - noise.mean - 1.8 * noise.dev - 3);
 
         // Learn how much the background wobbles only from frames that look like background
         // (and for the first second): otherwise kicks and hits teach it to ignore them
         const deviation = Math.abs(level - noise.mean);
         if (above === 0 || noise.frames++ < 60)
             noise.dev += (deviation - noise.dev) * 0.03;
-        noise.mean += (level - noise.mean) * (level < noise.mean ? 0.05 : 0.004);
+        noise.mean += (level - noise.mean) * (level < noise.mean ? 0.05 : 0.001);
 
         // Treble is naturally quieter than bass, so tilt it up a little
         mic.levels[k] = above / 255 * (1 + d * 0.8);
@@ -795,7 +795,7 @@ function micLevel(d) {
     const a = mic.levels[i], b = mic.levels[Math.min(MIC_SLOTS - 1, i + 1)];
     const value = a + (b - a) * (f - i);
 
-    return Math.pow(Math.min(1, value / micPeak), 1.4) * 0.95;
+    return Math.pow(Math.min(1, value / micPeak), 1.15) * 0.95;
 }
 
 function roundedBar(x, y, w, h, r) {

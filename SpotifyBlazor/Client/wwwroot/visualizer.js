@@ -174,14 +174,17 @@ export async function setMic(on) {
         analyser.smoothingTimeConstant = 0.2;
         audio.createMediaStreamSource(stream).connect(analyser);
 
-        // Treat anything quieter than -80 dB as silence (the default, -100 dB, counts the
-        // room's hiss as sound)
+        // Loudness range read from the mic: anything under -80 dB is silence (the default,
+        // -100 dB, counts the room's hiss as sound), and the top is raised from -30 dB so
+        // loud kicks have room above a bass-heavy hum instead of clipping
         analyser.minDecibels = -80;
+        analyser.maxDecibels = -10;
 
         mic = {
             stream, audio, analyser,
             bins: new Uint8Array(analyser.frequencyBinCount),
-            floor: null // per-frequency noise floor, learned while listening
+            noise: null,  // per-band background estimate, learned while listening
+            levels: null  // this frame's level per band, above the background
         };
         micPeak = 0.2;
         return "on";
@@ -311,10 +314,10 @@ function draw(now) {
     ctx.shadowBlur = 22 * dpr * (1 + 0.6 * chorus + 0.5 * flash);
 
     if (mic) {
-        mic.analyser.getByteFrequencyData(mic.bins);
-        // Let the peak decay slowly so the bars rescale when the room gets quieter
-        micPeak = Math.max(micPeak * 0.997, 0.2);
-        learnNoiseFloor();
+        // Let the peak decay slowly so the bars rescale when the music gets quieter; the
+        // minimum keeps leftover noise from being stretched to full height
+        micPeak = Math.max(micPeak * 0.997, 0.12);
+        readMic();
     }
 
     const fs = { t, dt, speed, kick, swell, boost, calm, dpr, palette: colors.map(rgbToHsl) };
@@ -735,39 +738,62 @@ function drawShatter(fs) {
     return { hidden: true };
 }
 
-// Bar height from the mic for a bar at distance d from the middle (0 middle … 1 edge).
-// The middle shows bass and the edges treble, spread on a log scale like hearing is.
-// Tracks each frequency's background level: drops quickly to the quietest moments and
-// creeps up only slowly, so steady noise is learned but music (which keeps dipping) isn't
-function learnNoiseFloor() {
-    const { bins } = mic;
-    if (!mic.floor) {
-        mic.floor = Float32Array.from(bins);
-        return;
+// Mic levels are worked out once per frame for MIC_SLOTS bands, bass to treble on a log
+// scale like hearing is; micLevel() reads between them.
+const MIC_SLOTS = 48;
+
+// Reads the mic and keeps, per band, an estimate of the room's steady background (fans,
+// PC hum, hiss): its usual level and how much it normally wobbles. Only sound that clearly
+// rises above that counts. The estimate sinks quickly in quiet moments and rises slowly,
+// so steady noise is learned within a few seconds while the music's peaks stay visible.
+function readMic() {
+    const { analyser, audio, bins } = mic;
+    analyser.getByteFrequencyData(bins);
+    const hzPerBin = audio.sampleRate / analyser.fftSize;
+
+    if (!mic.noise) {
+        mic.noise = Array.from({ length: MIC_SLOTS }, () => ({ mean: -1, dev: 0 }));
+        mic.levels = new Float32Array(MIC_SLOTS);
     }
-    for (let b = 0; b < bins.length; b++) {
-        const f = mic.floor[b];
-        mic.floor[b] = bins[b] < f ? f + (bins[b] - f) * 0.1 : f + (bins[b] - f) * 0.001;
+
+    for (let k = 0; k < MIC_SLOTS; k++) {
+        const d = k / (MIC_SLOTS - 1);
+        const lowHz = 40 * Math.pow(8000 / 40, d);
+        const highHz = 40 * Math.pow(8000 / 40, Math.min(1, d + 1.5 / MIC_SLOTS));
+        const from = Math.max(1, Math.floor(lowHz / hzPerBin));
+        const to = Math.min(bins.length - 1, Math.max(from, Math.ceil(highHz / hzPerBin)));
+
+        let sum = 0;
+        for (let b = from; b <= to; b++) sum += bins[b];
+        const level = sum / (to - from + 1);
+
+        const noise = mic.noise[k];
+        if (noise.mean < 0) {
+            noise.mean = level; // first frame: assume it's background
+            noise.frames = 0;
+        }
+
+        const above = Math.max(0, level - noise.mean - 2.5 * noise.dev - 6);
+
+        // Learn how much the background wobbles only from frames that look like background
+        // (and for the first second): otherwise kicks and hits teach it to ignore them
+        const deviation = Math.abs(level - noise.mean);
+        if (above === 0 || noise.frames++ < 60)
+            noise.dev += (deviation - noise.dev) * 0.03;
+        noise.mean += (level - noise.mean) * (level < noise.mean ? 0.05 : 0.004);
+
+        // Treble is naturally quieter than bass, so tilt it up a little
+        mic.levels[k] = above / 255 * (1 + d * 0.8);
+        micPeak = Math.max(micPeak, mic.levels[k]);
     }
 }
 
+// Bar height from the mic for a bar at distance d from the middle (0 bass … 1 treble)
 function micLevel(d) {
-    const { analyser, audio, bins } = mic;
-    const hzPerBin = audio.sampleRate / analyser.fftSize;
-
-    const lowHz = 40 * Math.pow(8000 / 40, d);
-    const highHz = 40 * Math.pow(8000 / 40, Math.min(1, d + 0.04));
-    const from = Math.max(1, Math.floor(lowHz / hzPerBin));
-    const to = Math.max(from, Math.ceil(highHz / hzPerBin));
-
-    // Only what rises above the steady background (fans, hum, hiss) counts
-    let sum = 0;
-    for (let b = from; b <= to && b < bins.length; b++)
-        sum += Math.max(0, bins[b] - mic.floor[b] * 1.15 - 4);
-
-    // Treble is naturally quieter than bass, so tilt it up a little
-    const value = (sum / (to - from + 1) / 255) * (1 + d * 0.8);
-    micPeak = Math.max(micPeak, value);
+    const f = Math.min(MIC_SLOTS - 1, Math.max(0, d * (MIC_SLOTS - 1)));
+    const i = Math.floor(f);
+    const a = mic.levels[i], b = mic.levels[Math.min(MIC_SLOTS - 1, i + 1)];
+    const value = a + (b - a) * (f - i);
 
     return Math.pow(Math.min(1, value / micPeak), 1.4) * 0.95;
 }

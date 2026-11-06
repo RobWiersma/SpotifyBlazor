@@ -5,6 +5,11 @@
 // swells. It rises while playing and settles when paused.
 // Mic mode instead listens through the microphone and draws what it hears.
 // The audio is only measured in the browser, never recorded or sent anywhere.
+//
+// Two styles: "bars" along the bottom, or "ring" around the album cover (which
+// pulses with the bass). The synced lyrics' timestamps give the one piece of real
+// song structure available: lines that repeat are treated as the chorus, and the
+// visualizer gets bigger and brighter there, with a flash as each chorus begins.
 
 // Spotify green, violet, hot pink
 const FALLBACK = [[29, 185, 84], [127, 90, 240], [255, 64, 160]];
@@ -14,9 +19,23 @@ let playing = false;
 let level = 0;              // 0 paused … 1 playing, eased
 let bpm = 118;
 let bars = [];
+let ringBars = [];
+let style = "bars";
 let colors = FALLBACK.map(c => [...c]);
 let targetColors = FALLBACK;
 let imageUrl;
+let lastNow = 0;
+let huePhase = 0;           // hue wave position; advances faster in a chorus
+
+// Song position, counted on from Spotify's last report
+let positionMs = 0;
+let positionSyncedAt = 0;   // Date.now() of that report
+
+// Lyric timing: [{ time (ms), chorus (bool) }]
+let lines = [];
+let lineIndex = -1;
+let chorus = 0;             // 0 verse … 1 chorus, eased
+let flash = 0;              // burst when a line or chorus starts, fades out
 
 // Mic mode
 let mic;                    // { stream, audio, analyser, bins }
@@ -28,6 +47,7 @@ export function start(el, options) {
     stop();
 
     canvas = el;
+    style = getStyle();
     ctx = canvas.getContext("2d");
 
     resizeObserver = new ResizeObserver(resize);
@@ -38,9 +58,14 @@ export function start(el, options) {
     frame = requestAnimationFrame(draw);
 }
 
-// options: { imageUrl, playing, trackId }
+// options: { imageUrl, playing, trackId, positionMs, syncedAtMs }
 export function update(options) {
     playing = !!options.playing;
+
+    if (options.syncedAtMs) {
+        positionMs = options.positionMs ?? 0;
+        positionSyncedAt = options.syncedAtMs;
+    }
 
     if (options.trackId)
         bpm = 90 + (hash(options.trackId) % 50); // 90–139, stable per track
@@ -56,6 +81,37 @@ export function stop() {
     resizeObserver?.disconnect();
     canvas = ctx = resizeObserver = undefined;
     stopMic();
+    setCoverPulse(null);
+}
+
+// "bars" or "ring"; remembered per browser
+export function getStyle() {
+    try { return localStorage.getItem("visualizer-style") === "ring" ? "ring" : "bars"; } catch { return "bars"; }
+}
+
+export function setStyle(name) {
+    style = name === "ring" ? "ring" : "bars";
+    try { localStorage.setItem("visualizer-style", style); } catch { }
+    if (style !== "ring") setCoverPulse(null);
+}
+
+// The current song's timed lyric lines: [{ time (ms), text }]. A line counts as
+// chorus when its text repeats in the song and so does a line next to it, which
+// skips one-off repeats like a single echoed phrase in a verse.
+export function setLyrics(timed) {
+    // Compare words only: ignore case, punctuation and ad-libs like "(oh)"
+    const norm = s => (s ?? "").toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^\p{L}\p{N} ]/gu, "").replace(/\s+/g, " ").trim();
+    const keys = (timed ?? []).map(l => norm(l.text));
+
+    const counts = new Map();
+    keys.forEach(k => { if (k) counts.set(k, (counts.get(k) ?? 0) + 1); });
+    const repeats = keys.map(k => !!k && counts.get(k) > 1);
+
+    lines = (timed ?? []).map((l, i) => ({
+        time: l.time,
+        chorus: repeats[i] && (repeats[i - 1] || repeats[i + 1])
+    }));
+    lineIndex = -1;
 }
 
 // Turns mic mode on or off. Returns "on", "off", "denied" (permission refused)
@@ -114,13 +170,54 @@ function resize() {
     canvas.width = Math.round(canvas.clientWidth * dpr);
     canvas.height = Math.round(canvas.clientHeight * dpr);
 
-    // About one bar per 18 CSS px, each with its own random wobble
-    const count = Math.max(24, Math.min(96, Math.round(canvas.clientWidth / 18)));
-    bars = Array.from({ length: count }, () => ({
+    // About one bar per 18 CSS px
+    bars = makeBars(Math.max(24, Math.min(96, Math.round(canvas.clientWidth / 18))));
+}
+
+// Bars each with their own random wobble
+function makeBars(count) {
+    return Array.from({ length: count }, () => ({
         value: 0,
         f: [0.6 + Math.random() * 0.9, 1.7 + Math.random() * 1.6, 3.5 + Math.random() * 3],
         p: [Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28]
     }));
+}
+
+// Scales the album cover for the ring style's bass pulse; null puts it back
+function setCoverPulse(scale) {
+    const art = document.querySelector(".np-art");
+    if (!art) return;
+
+    // Inline styles: Blazor doesn't render a style attribute on the cover, so it won't
+    // overwrite them. The transform transition is dropped so the pulse isn't smoothed away.
+    art.style.transition = scale == null ? "" : "opacity 0.4s ease";
+    art.style.transform = scale == null ? "" : `scale(${scale})`;
+}
+
+// Moves to the lyric line at the current position; a new line gives a small flash,
+// the first line of a chorus a big one
+function followLyrics() {
+    if (lines.length === 0) {
+        chorus += (0 - chorus) * 0.03;
+        return;
+    }
+
+    const elapsed = playing ? Date.now() - positionSyncedAt : 0;
+    const now = positionMs + elapsed + 300; // same 300ms lead as the lyrics panel
+
+    let index = -1;
+    for (let i = 0; i < lines.length && lines[i].time <= now; i++) index = i;
+
+    if (index !== lineIndex) {
+        const line = lines[index];
+        const wasChorus = lines[lineIndex]?.chorus;
+        if (line && playing)
+            flash = Math.max(flash, line.chorus && !wasChorus ? 1 : 0.25);
+        lineIndex = index;
+    }
+
+    const target = playing && lines[lineIndex]?.chorus ? 1 : 0;
+    chorus += (target - chorus) * 0.03;
 }
 
 function draw(now) {
@@ -128,22 +225,87 @@ function draw(now) {
     if (!ctx || bars.length === 0) return;
 
     const t = now / 1000;
+    const dt = Math.min(0.1, lastNow ? (now - lastNow) / 1000 : 0);
+    lastNow = now;
     const calm = reducedMotion();
     const speed = calm ? 0.35 : 1;
 
     level += ((playing ? 1 : 0) - level) * 0.04;
+
+    followLyrics();
+    flash *= 0.93;
+    if (calm) flash = 0;
+
+    // Chorus: everything bigger, brighter and quicker; a flash as each line lands
+    const boost = 1 + 0.35 * chorus + 0.25 * flash;
+    huePhase += dt * speed * 0.4 * (1 + 1.5 * chorus);
 
     // Ease colors toward the current album's palette
     for (let i = 0; i < 3; i++)
         for (let c = 0; c < 3; c++)
             colors[i][c] += (targetColors[i][c] - colors[i][c]) * 0.03;
 
-    // Kick: a sharp pulse on each beat. Swell: slow 16-second build and release.
+    // Kick: a sharp pulse on each beat, harder in a chorus. Swell: slow 16-second build and release.
     const beat = (t * bpm / 60) % 1;
-    const kick = calm ? 0 : Math.pow(1 - beat, 6);
+    const kick = calm ? 0 : Math.pow(1 - beat, 6) * (1 + 0.6 * chorus);
     const swell = 0.7 + 0.3 * Math.sin(t * 2 * Math.PI / 16);
 
     const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.shadowBlur = 22 * dpr * (1 + 0.6 * chorus + 0.5 * flash);
+
+    if (mic) {
+        mic.analyser.getByteFrequencyData(mic.bins);
+        // Let the peak decay slowly so the bars rescale when the room gets quieter
+        micPeak = Math.max(micPeak * 0.997, 0.08);
+    }
+
+    const frameState = { t, speed, kick, swell, boost, palette: colors.map(rgbToHsl) };
+
+    const art = style === "ring" ? document.querySelector(".np-art") : null;
+    if (art && art.offsetWidth > 0)
+        drawRing(art, frameState, dpr, calm);
+    else
+        drawBars(frameState, dpr);
+}
+
+// Moves a bar toward its next height. x runs -1 … 1 with 0 as the bass end.
+function stepBar(bar, x, { t, speed, kick, swell, boost }) {
+    const center = Math.pow(1 - Math.abs(x), 1.5);
+
+    let target;
+    if (mic) {
+        target = micLevel(Math.abs(x));
+    } else {
+        const noise =
+            0.5 * Math.sin(t * speed * bar.f[0] * 2 + bar.p[0]) +
+            0.3 * Math.sin(t * speed * bar.f[1] * 2 + bar.p[1]) +
+            0.2 * Math.sin(t * speed * bar.f[2] * 2 + bar.p[2]);
+
+        target = level * swell * (
+            (0.25 + 0.45 * center) * (0.55 + 0.45 * noise) +
+            kick * (0.15 + 0.45 * center)
+        );
+    }
+    target = Math.min(1.25, target * boost);
+
+    // Rise fast, fall slowly, like a real meter
+    bar.value += (target - bar.value) * (target > bar.value ? 0.35 : 0.08);
+}
+
+// Color for a bar at distance d from the bass end: the palette spread outwards, then a hue
+// wave that drifts across the bars over time. Taller bars glow brighter. Full saturation keeps it vivid.
+function barColor(palette, d, value) {
+    const [h1, s1, l1] = d < 0.5
+        ? mixHsl(palette[0], palette[1], d * 2)
+        : mixHsl(palette[1], palette[2], (d - 0.5) * 2);
+    const hue = h1 + 50 * d + 35 * Math.sin(huePhase + d * 4);
+    const sat = Math.max(s1, 0.85);
+    const light = Math.min(0.62, Math.max(0.45, l1)) + 0.1 * Math.min(1, value) + 0.08 * chorus + 0.08 * flash;
+    return { hue, sat, light };
+}
+
+function drawBars(frameState, dpr) {
     const w = canvas.width;
 
     // Stand the bars on top of the player bar: the Now Playing page runs past the bottom
@@ -156,53 +318,14 @@ function draw(now) {
     const slot = w / bars.length;
     const barW = slot * 0.62;
 
-    ctx.clearRect(0, 0, w, canvas.height);
-    ctx.shadowBlur = 22 * dpr;
-
-    // The album's colors as hue/saturation/lightness, so each bar can shift its hue
-    const palette = colors.map(rgbToHsl);
-
-    if (mic) {
-        mic.analyser.getByteFrequencyData(mic.bins);
-        // Let the peak decay slowly so the bars rescale when the room gets quieter
-        micPeak = Math.max(micPeak * 0.997, 0.08);
-    }
-
     bars.forEach((bar, i) => {
         // Mirrored: the middle bars act like bass, louder and kicked harder
         const x = (i + 0.5) / bars.length * 2 - 1;
-        const center = Math.pow(1 - Math.abs(x), 1.5);
-
-        let target;
-        if (mic) {
-            target = micLevel(Math.abs(x));
-        } else {
-            const noise =
-                0.5 * Math.sin(t * speed * bar.f[0] * 2 + bar.p[0]) +
-                0.3 * Math.sin(t * speed * bar.f[1] * 2 + bar.p[1]) +
-                0.2 * Math.sin(t * speed * bar.f[2] * 2 + bar.p[2]);
-
-            target = level * swell * (
-                (0.25 + 0.45 * center) * (0.55 + 0.45 * noise) +
-                kick * (0.15 + 0.45 * center)
-            );
-        }
-
-        // Rise fast, fall slowly, like a real meter
-        bar.value += (target - bar.value) * (target > bar.value ? 0.35 : 0.08);
+        stepBar(bar, x, frameState);
 
         const barH = Math.max(2 * dpr, bar.value * maxH);
         const bx = i * slot + (slot - barW) / 2;
-
-        // Color: the palette spread from the middle outwards, then a hue wave that drifts
-        // across the bars over time. Taller bars glow brighter. Full saturation keeps it vivid.
-        const d = Math.abs(x);
-        const [h1, s1, l1] = d < 0.5
-            ? mixHsl(palette[0], palette[1], d * 2)
-            : mixHsl(palette[1], palette[2], (d - 0.5) * 2);
-        const hue = h1 + 50 * d + 35 * Math.sin(t * speed * 0.4 + d * 4);
-        const sat = Math.max(s1, 0.85);
-        const light = Math.min(0.62, Math.max(0.45, l1)) + 0.1 * bar.value;
+        const { hue, sat, light } = barColor(frameState.palette, Math.abs(x), bar.value);
 
         const fill = ctx.createLinearGradient(0, h, 0, h - barH);
         fill.addColorStop(0, hsla(hue, sat, light, 0.95));
@@ -212,6 +335,64 @@ function draw(now) {
         ctx.shadowColor = hsla(hue, sat, light, 0.75);
         roundedBar(bx, h - barH, barW, barH, Math.min(barW / 2, 6 * dpr));
     });
+}
+
+// Bars pointing outwards from a circle around the album cover, bass at the bottom and
+// treble at the top, mirrored left and right. The cover itself pulses with the bass.
+function drawRing(art, frameState, dpr, calm) {
+    const box = canvas.getBoundingClientRect();
+    const rect = art.getBoundingClientRect();
+
+    // offsetWidth ignores the pulse's scale, so the ring doesn't breathe with it
+    const size = art.offsetWidth;
+    const cx = (rect.left + rect.width / 2 - box.left) * dpr;
+    const cy = (rect.top + rect.height / 2 - box.top) * dpr;
+    const radius = (size * 0.72 + 8) * dpr;                 // clears the square's corners
+    const maxLen = Math.min(size * 0.95, 280) * dpr;
+
+    // About one bar per 9 CSS px of circumference
+    const count = Math.max(48, Math.min(140, Math.round(2 * Math.PI * radius / dpr / 9)));
+    if (ringBars.length !== count) ringBars = makeBars(count);
+
+    const barW = Math.max(2 * dpr, (2 * Math.PI * radius / count) * 0.55);
+    let bass = 0;
+
+    ringBars.forEach((bar, i) => {
+        // i = 0 at the top going clockwise; x = 0 lands at the bottom
+        const angle = -Math.PI / 2 + (i + 0.5) / count * 2 * Math.PI;
+        const x = (i + 0.5) / count * 2 - 1;
+        stepBar(bar, x, frameState);
+        if (Math.abs(x) < 0.15) bass = Math.max(bass, bar.value);
+
+        const len = Math.max(2 * dpr, bar.value * maxLen);
+        const { hue, sat, light } = barColor(frameState.palette, Math.abs(x), bar.value);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle + Math.PI / 2);
+
+        const fill = ctx.createLinearGradient(0, -radius, 0, -radius - len);
+        fill.addColorStop(0, hsla(hue, sat, light, 0.95));
+        fill.addColorStop(1, hsla(hue + 40, sat, Math.min(0.85, light + 0.18), 0.9));
+
+        ctx.fillStyle = fill;
+        ctx.shadowColor = hsla(hue, sat, light, 0.75);
+        roundedBar(-barW / 2, -radius - len, barW, len, Math.min(barW / 2, 4 * dpr));
+        ctx.restore();
+    });
+
+    // Soft halo just inside the ring, brighter on the beat
+    const [h0, s0] = frameState.palette[0];
+    const glow = ctx.createRadialGradient(cx, cy, radius * 0.6, cx, cy, radius * 1.05);
+    glow.addColorStop(0, hsla(h0, Math.max(s0, 0.85), 0.55, 0));
+    glow.addColorStop(1, hsla(h0, Math.max(s0, 0.85), 0.55, 0.12 + 0.25 * bass + 0.2 * flash));
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 1.05, 0, 2 * Math.PI);
+    ctx.fill();
+
+    setCoverPulse(calm ? 1 : 1 + 0.035 * Math.min(1, bass) * (0.5 + 0.5 * chorus) + 0.02 * flash);
 }
 
 // Bar height from the mic for a bar at distance d from the middle (0 middle … 1 edge).

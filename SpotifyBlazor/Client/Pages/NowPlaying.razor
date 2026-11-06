@@ -71,6 +71,10 @@
                     {
                         <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
                                 title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
+                        <button class="np-btn" @onclick="CycleVisualizerStyle"
+                                title="Switch between bars along the bottom and a ring around the cover">
+                            @(_visualizerStyle == "ring" ? "◎ Ring" : "▮ Bars")
+                        </button>
                     }
                 </div>
 
@@ -193,7 +197,9 @@
     private bool _visualizerRunning;
     private bool _micWanted; // saved choice: use the mic whenever the visualizer runs
     private bool _micOn;     // the mic is actually being listened to
+    private string _visualizerStyle = "bars"; // "bars" or "ring"
     private string? _visualizerSentState; // last state sent to visualizer.js, to skip repeat updates
+    private string? _visualizerLyricsFor; // which lyrics load visualizer.js has, for chorus detection
     private ElementReference _visualizerCanvas;
     private IJSObjectReference? _visualizerModule;
 
@@ -283,8 +289,12 @@
             _visualizerModule = await JS.InvokeAsync<IJSObjectReference>("import", "/visualizer.js");
             _showVisualizer = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer");
             _micWanted = await _visualizerModule.InvokeAsync<bool>("isEnabled", "visualizer-mic");
+            _visualizerStyle = await _visualizerModule.InvokeAsync<string>("getStyle");
             if (_showVisualizer)
+            {
+                await EnsureLyricsAsync(); // the chorus boost needs the lyric timings
                 StateHasChanged(); // renders the canvas; the next render starts it
+            }
         }
 
         await SyncVisualizerAsync();
@@ -316,6 +326,7 @@
             {
                 _visualizerRunning = false;
                 _visualizerSentState = null;
+                _visualizerLyricsFor = null;
                 _micOn = false; // stop() releases the mic
                 await _visualizerModule.InvokeVoidAsync("stop");
             }
@@ -326,7 +337,11 @@
         {
             imageUrl = AlbumImage,
             playing = _nowPlaying!.IsPlaying,
-            trackId = _nowPlaying.Item?.Id
+            trackId = _nowPlaying.Item?.Id,
+            // Last reported position and when: visualizer.js counts on from there to follow
+            // the lyric lines. Only changes when Spotify is asked again, so updates stay rare.
+            positionMs = _progressAtSync,
+            syncedAtMs = new DateTimeOffset(_progressSyncedAt, TimeSpan.Zero).ToUnixTimeMilliseconds()
         };
 
         if (!_visualizerRunning)
@@ -343,6 +358,17 @@
             _visualizerSentState = options.ToString();
             await _visualizerModule.InvokeVoidAsync("update", options);
         }
+
+        // Hand over this song's lyric timings once they've loaded (none yet: no chorus boost)
+        var lyricsKey = $"{_lyricsTrackId}|{_lyricsReady}|{_timedLyrics.Count}";
+        if (lyricsKey != _visualizerLyricsFor)
+        {
+            _visualizerLyricsFor = lyricsKey;
+            var timed = _lyricsReady && _lyricsTrackId == _nowPlaying.Item?.Id
+                ? _timedLyrics.Select(l => new { time = l.Time.TotalMilliseconds, text = l.Text }).ToArray()
+                : Array.Empty<object>();
+            await _visualizerModule.InvokeVoidAsync("setLyrics", (object)timed);
+        }
     }
 
     private async Task ToggleVisualizer()
@@ -351,6 +377,14 @@
 
         if (_visualizerModule != null)
             await _visualizerModule.InvokeVoidAsync("setEnabled", _showVisualizer);
+
+        await EnsureLyricsAsync();
+    }
+
+    private async Task CycleVisualizerStyle()
+    {
+        _visualizerStyle = _visualizerStyle == "ring" ? "bars" : "ring";
+        await _visualizerModule!.InvokeVoidAsync("setStyle", _visualizerStyle);
     }
 
     private async Task ToggleMic()
@@ -512,12 +546,13 @@
         await EnsureLyricsAsync();
     }
 
-    // Loads lyrics when the panel is open and the song changed since the last load.
-    // (Reloading on every 10-second refresh used to reset the panel mid-song.)
+    // Loads lyrics when the panel is open (or the visualizer, for its chorus boost) and the
+    // song changed since the last load. (Reloading on every 10-second refresh used to reset
+    // the panel mid-song.)
     private async Task EnsureLyricsAsync()
     {
         var trackId = _nowPlaying?.Item?.Id;
-        if (!_showLyrics || trackId == null || trackId == _lyricsTrackId)
+        if ((!_showLyrics && !_showVisualizer) || trackId == null || trackId == _lyricsTrackId)
             return;
 
         _lyricsTrackId = trackId;

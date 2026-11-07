@@ -16,13 +16,17 @@
 
         <div class="content-root d-flex flex-column flex-grow-1">
 
-            <SpotHeader />
+            <!-- Hidden on phones to give the page the room; search, home and login
+                 move into the player bar's ☰ Menu there -->
+            <div class="top-bar">
+                <SpotHeader />
 
-            <input value="@SearchText"
-                   @oninput="OnSearchInput"
-                   @onkeydown="HandleSearchKey"
-                   placeholder="Search…"
-                   class="search-box" />
+                <input value="@SearchText"
+                       @oninput="OnSearchInput"
+                       @onkeydown="HandleSearchKey"
+                       placeholder="Search…"
+                       class="search-box" />
+            </div>
 
             <main class="flex-grow-1">
                 <article class="content px-4">

@@ -5,17 +5,24 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject ConfigService Config
 
 <div id="playerbar" class="playerbar d-flex align-items-center px-3 py-2">
 
     @if (Auth.State != LoginState.LoggedIn)
     {
-        <div class="pb-center text-light small">
+        <div class="pb-center text-light small d-flex align-items-center justify-content-center gap-3">
             @(Auth.State == LoginState.LoggingIn
                 ? "Connecting to Spotify…"
                 : Auth.State == LoginState.LoginFailed
                     ? "Login failed"
                     : "Not logged in")
+
+            <!-- Phones have no header, so the login button lives here -->
+            @if (Auth.State != LoginState.LoggingIn)
+            {
+                <button class="btn btn-success btn-sm d-md-none" @onclick="Login">Login with Spotify</button>
+            }
         </div>
     }
     else if (current?.Item != null)
@@ -88,7 +95,7 @@
         </div>
 
         <!-- RIGHT SECTION (mirrors left width) -->
-        <div class="pb-right d-flex align-items-center gap-3">
+        <div class="pb-right d-none d-md-flex align-items-center gap-3">
 
             <button class="queue-button d-none d-md-block"
                     @onclick="ToggleQueue">
@@ -103,32 +110,53 @@
                 <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
             </div>
 
-            <button class="mobile-tools-toggle btn btn-dark d-md-none"
-                    @onclick="ToggleMobileTools">
-                ⚙️ Options
-            </button>
-
-            @if (showMobileTools)
-            {
-                <div class="mobile-tools-panel d-md-none">
-
-                    <button class="mobile-option"
-                            @onclick="ToggleQueue">
-                        Queue
-                    </button>
-
-                    <VolumePopup @ref="VolumePopup" />
-
-                    <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
-
-                </div>
-            }
-
         </div>
     }
     else
     {
         <div class="pb-center text-light">No music playing</div>
+    }
+
+    <!-- Phones: the header is hidden, so search, home and login live in this menu
+         along with the player tools that don't fit in the bar -->
+    <button class="mobile-tools-toggle btn btn-dark d-md-none" @onclick="ToggleMobileTools">
+        ☰ Menu
+    </button>
+
+    @if (showMobileTools)
+    {
+        <div class="mobile-tools-panel d-md-none">
+
+            @if (Auth.State == LoginState.LoggedIn)
+            {
+                <input class="search-box mobile-search"
+                       placeholder="Search…"
+                       @bind="_mobileSearch"
+                       @bind:event="oninput"
+                       @onkeydown="MobileSearchKey" />
+            }
+
+            <button class="mobile-option" @onclick="GoHome">🏡 Home</button>
+
+            @if (Auth.State == LoginState.LoggedIn && current?.Item != null)
+            {
+                <button class="mobile-option" @onclick="ToggleQueue">Queue</button>
+
+                <VolumePopup @ref="VolumePopup" />
+
+                <DevicePicker OnDeviceChanged="HandleDeviceChanged" />
+            }
+
+            @if (Auth.State == LoginState.LoggedIn)
+            {
+                <button class="mobile-option mobile-logout" @onclick="Logout">Logout</button>
+            }
+            else if (Auth.State != LoginState.LoggingIn)
+            {
+                <button class="mobile-option" @onclick="Login">Login with Spotify</button>
+            }
+
+        </div>
     }
 
 </div>
@@ -236,6 +264,38 @@
     private bool showMobileTools = false;
 
     private void ToggleMobileTools() => showMobileTools = !showMobileTools;
+
+    private string _mobileSearch = "";
+
+    // Enter in the menu's search box: same as the desktop header's search
+    private void MobileSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_mobileSearch))
+            return;
+
+        showMobileTools = false;
+        Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_mobileSearch)}");
+    }
+
+    private void GoHome()
+    {
+        showMobileTools = false;
+        Nav.NavigateTo("/");
+    }
+
+    private void Login()
+    {
+        var url = SpotifyLogin.AuthorizeUrl(Config);
+        if (url != null)
+            Nav.NavigateTo(url, forceLoad: true);
+    }
+
+    private async Task Logout()
+    {
+        showMobileTools = false;
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/", forceLoad: true);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

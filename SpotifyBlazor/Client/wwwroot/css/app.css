@@ -556,10 +556,11 @@ a {
     margin-top: 10px;
 }
 
-/* Floating mobile tools panel */
+/* Floating mobile menu, opening just above the player bar */
 .mobile-tools-panel {
     position: absolute;
-    bottom: 60px;
+    bottom: calc(100% + 8px);
+    min-width: 240px;
     left: 50%;
     transform: translateX(-50%);
     background: #222;
@@ -613,14 +614,14 @@ a {
 }
 
 /* Fullscreen container: exactly the space between the header (40px login bar + 42px
-   search box) and the player bar, so the page doesn't scroll. clip, not hidden: a hidden
+   search box; none on phones) and the player bar, so the page doesn't scroll. clip, not hidden: a hidden
    overflow can still be scrolled by the browser (e.g. when a button near the bottom gets
    focus), which shoved the cover off the top. */
 .np-container {
     position: relative;
     width: 100%;
-    height: calc(100vh - 82px - var(--playerbar-height));
-    height: calc(100dvh - 82px - var(--playerbar-height));
+    height: calc(100vh - var(--header-height) - var(--playerbar-height));
+    height: calc(100dvh - var(--header-height) - var(--playerbar-height));
     overflow: clip;
 }
 
@@ -1927,5 +1928,30 @@ a {
 
     .media-header-title {
         font-size: 1.75rem;
+    }
+}
+
+/* Phones: no header (login bar + search box), so pages get the whole screen. Search,
+   home and login are in the player bar's ☰ Menu instead. The breakpoint matches
+   Bootstrap's d-md-none, which shows that menu. */
+:root {
+    --header-height: 82px;
+}
+
+@media (max-width: 767.98px) {
+    .top-bar {
+        display: none;
+    }
+
+    :root {
+        --header-height: 0px;
+    }
+
+    .mobile-search {
+        margin-bottom: 4px;
+    }
+
+    .mobile-logout {
+        color: #ff8a8a !important;
     }
 }

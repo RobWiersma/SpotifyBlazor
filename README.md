@@ -24,7 +24,7 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for Daft Punk's Too Long / Steam Machine, with Ring, Particles and Tunnel layered: pink and violet bars circling the cover, sparks flying out, and a glowing square expanding behind it" width="100%" />
+  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for The Chemical Brothers' Elektrobank, with Ring, Particles and Tunnel layered: rainbow bars circling the cover, sparks flying out, and glowing pink squares expanding behind it" width="100%" />
   <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, mixed and matched (here Ring + Particles + Tunnel), hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
 </p>
 
@@ -57,11 +57,11 @@
   <br/><sub><b>Album</b> — hover a row to play</sub>
 </td>
 <td width="37%" align="center" valign="top">
-  <img src="docs/screenshots/now-playing.jpg" alt="Now Playing for Linkin Park's Leave Out All The Rest, with the synced lyrics panel open and the current line highlighted" />
+  <img src="docs/screenshots/now-playing.jpg" alt="Now Playing for The Chemical Brothers' Elektrobank, with the synced lyrics panel open and the current line highlighted" />
   <br/><sub><b>Now Playing</b> — synced lyrics</sub>
 </td>
 <td width="26%" align="center" valign="top" rowspan="2">
-  <img src="docs/screenshots/mobile-album.jpg" alt="Album page on a phone" />
+  <img src="docs/screenshots/mobile-album.jpg" alt="Album page for Random Access Memories on a phone, with the top bar hidden and the ☰ Menu in the player bar" />
   <br/><sub><b>Mobile</b></sub>
 </td>
 </tr>

@@ -6,7 +6,7 @@
 
 **Your Spotify library, player and podcasts in a fast Blazor WebAssembly app, with playback right in the browser.**
 
-[![Live demo](https://img.shields.io/badge/▶_Live_demo-1DB954?style=for-the-badge&logo=spotify&logoColor=white)](https://spotifyblazor-ayb0fch4d9ceaha2.westus3-01.azurewebsites.net/)
+[![Live demo](https://img.shields.io/badge/▶_Live_demo-1DB954?style=for-the-badge&logo=spotify&logoColor=white)](https://spotifyblazor.bswiersma.com/)
 
 ![.NET 8](https://img.shields.io/badge/.NET-8.0_LTS-512BD4?logo=dotnet&logoColor=white)
 ![Blazor WebAssembly](https://img.shields.io/badge/Blazor-WebAssembly-512BD4?logo=blazor&logoColor=white)

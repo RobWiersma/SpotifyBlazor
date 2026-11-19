@@ -7,6 +7,9 @@ namespace SpotifyBlazor.Client.Services;
 // Spotify or our own API, using the error message from the response body.
 public class ErrorNotificationHandler : DelegatingHandler
 {
+    // Set on a request whose 404 the caller handles itself, so no toast is shown for it
+    public static readonly HttpRequestOptionsKey<bool> QuietNotFound = new("QuietNotFound");
+
     private readonly NotificationService _notifications;
 
     public ErrorNotificationHandler(NotificationService notifications)
@@ -37,7 +40,10 @@ public class ErrorNotificationHandler : DelegatingHandler
             throw;
         }
 
-        if (!response.IsSuccessStatusCode)
+        var quiet = response.StatusCode == HttpStatusCode.NotFound &&
+                    request.Options.TryGetValue(QuietNotFound, out var q) && q;
+
+        if (!response.IsSuccessStatusCode && !quiet)
         {
             // Buffer so the caller can still read the body after we do
             await response.Content.LoadIntoBufferAsync();

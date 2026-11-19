@@ -118,16 +118,20 @@ public class WebPlayerService : IAsyncDisposable
     {
         _logger.LogWarning("Web player {Type}: {Message}", type, message);
 
-        SetError(type == "account_error"
-            ? "Playing in the browser needs Spotify Premium."
-            : $"Web player error: {message}");
+        SetError(type switch
+        {
+            "account_error" => "Playing in the browser needs Spotify Premium.",
+            // Spotify's player needs the browser's DRM (Widevine); without it the SDK fails to start
+            "initialization_error" => "The browser's DRM is off or missing. In Firefox, turn on \"Play DRM-controlled content\" in Settings, then reload.",
+            _ => $"Web player error: {message}"
+        });
     }
 
     private void SetError(string message)
     {
         Error = message;
         IsReady = false;
-        _auth.FallbackDeviceId = null;
+        _auth.SetFallbackDeviceError(message);
         OnChange?.Invoke();
     }
 

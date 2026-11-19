@@ -596,30 +596,106 @@ public class SpotifyAuthService
             await NotifyPlaybackChangedAsync();
     }
 
-    // Device to fall back to when Spotify has no active device (the in-browser web player)
-    public string? FallbackDeviceId { get; set; }
+    // ---------------------------------------------------------
+    // The in-browser web player ("SpotifyBlazor Web Player"), set by WebPlayerService.
+    // Play goes there unless the user has picked another device in the device menu.
+    // ---------------------------------------------------------
+    private string? _fallbackDeviceId;
+    private TaskCompletionSource<string?> _webPlayerSettled = NewSettledSource();
 
-    // PUT /me/player/play on the active device. If there isn't one (404), retry on the fallback device.
+    public string? FallbackDeviceId
+    {
+        get => _fallbackDeviceId;
+        set
+        {
+            _fallbackDeviceId = value;
+            if (value != null)
+            {
+                FallbackDeviceError = null;
+                _webPlayerSettled.TrySetResult(value);
+            }
+            else if (_webPlayerSettled.Task.IsCompleted)
+            {
+                _webPlayerSettled = NewSettledSource();
+            }
+        }
+    }
+
+    // Why the web player can't play (no Premium, DRM blocked, …); null while it's fine or still loading
+    public string? FallbackDeviceError { get; private set; }
+
+    public void SetFallbackDeviceError(string message)
+    {
+        _fallbackDeviceId = null;
+        FallbackDeviceError = message;
+        _webPlayerSettled.TrySetResult(null);   // stop anyone waiting for it
+    }
+
+    // True once the user moves playback to another device from the device menu
+    private bool _userChoseOtherDevice;
+
+    private static TaskCompletionSource<string?> NewSettledSource() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    // The web player's device id, waiting a few seconds if it's still loading (right after start-up)
+    private async Task<string?> WaitForWebPlayerAsync(TimeSpan timeout)
+    {
+        if (!string.IsNullOrEmpty(_fallbackDeviceId))
+            return _fallbackDeviceId;
+
+        if (FallbackDeviceError != null)
+            return null;
+
+        var settled = _webPlayerSettled.Task;
+        var winner = await Task.WhenAny(settled, Task.Delay(timeout));
+        return winner == settled ? settled.Result : null;
+    }
+
+    // PUT /me/player/play. Goes to the browser's web player by default; if the user picked another
+    // device, or the web player can't play, it goes to Spotify's active device instead.
     private async Task<HttpResponseMessage> SendPlayAsync(object? body)
     {
-        var res = await SendPlayRequestAsync(body, null);
-
-        if (res.StatusCode == System.Net.HttpStatusCode.NotFound && !string.IsNullOrEmpty(FallbackDeviceId))
+        if (!_userChoseOtherDevice)
         {
-            _logger.LogInformation("Play: no active device, falling back to web player");
-            res = await SendPlayRequestAsync(body, FallbackDeviceId);
+            var webPlayerId = await WaitForWebPlayerAsync(TimeSpan.FromSeconds(8));
+            if (webPlayerId != null)
+                return await SendPlayRequestAsync(body, webPlayerId);
+
+            _logger.LogInformation("Play: web player unavailable, using the active device");
+        }
+
+        // No device named: Spotify uses the active one, or 404s if there's none.
+        // That 404 is handled here, so keep it out of the generic error toasts.
+        var res = await SendPlayRequestAsync(body, null, quietNotFound: true);
+
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            if (!string.IsNullOrEmpty(_fallbackDeviceId))
+            {
+                _logger.LogInformation("Play: no active device, falling back to web player");
+                return await SendPlayRequestAsync(body, _fallbackDeviceId);
+            }
+
+            _notifications.ShowWarning("No device to play on",
+                FallbackDeviceError != null
+                    ? $"This browser can't play: {FallbackDeviceError} Open Spotify on another device and try again."
+                    : "The browser player isn't ready yet. Try again in a moment, or open Spotify on another device.",
+                key: "play|no-device");
         }
 
         return res;
     }
 
-    private Task<HttpResponseMessage> SendPlayRequestAsync(object? body, string? deviceId)
+    private Task<HttpResponseMessage> SendPlayRequestAsync(object? body, string? deviceId, bool quietNotFound = false)
     {
         var url = "https://api.spotify.com/v1/me/player/play";
         if (!string.IsNullOrEmpty(deviceId))
             url += $"?device_id={Uri.EscapeDataString(deviceId)}";
 
         var req = new HttpRequestMessage(HttpMethod.Put, url);
+
+        if (quietNotFound)
+            req.Options.Set(ErrorNotificationHandler.QuietNotFound, true);
 
         if (body != null)
             req.Content = JsonContent.Create(body, body.GetType());
@@ -1257,7 +1333,11 @@ public class SpotifyAuthService
         Console.WriteLine(await res.Content.ReadAsStringAsync());
 
         if (res.IsSuccessStatusCode)
+        {
+            // Play keeps going to the device the user picked; picking the browser again restores the default
+            _userChoseOtherDevice = deviceId != _fallbackDeviceId;
             await NotifyPlaybackChangedAsync();
+        }
 
         return res.IsSuccessStatusCode;
     }

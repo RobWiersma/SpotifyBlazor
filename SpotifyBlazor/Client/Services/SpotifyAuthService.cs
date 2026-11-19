@@ -464,6 +464,8 @@ public class SpotifyAuthService
 
         await _js.InvokeVoidAsync("localStorage.removeItem", StorageKey);
 
+        _likedSongsContextUri = null;   // belongs to the user who just left
+
         _logger.LogInformation("LogoutAsync: Tokens cleared, notifying state change");
         await NotifyPlaybackChangedAsync();
     }
@@ -488,6 +490,23 @@ public class SpotifyAuthService
             return null;
 
         return await res.Content.ReadFromJsonAsync<SpotifyUserProfile>();
+    }
+
+    private string? _likedSongsContextUri;
+
+    // Liked Songs as a playable context. Phones reject the short "spotify:collection:tracks"
+    // with 403 "Restriction violated" (the web player accepts it); the user's own collection URI
+    // works everywhere.
+    public async Task<string> GetLikedSongsContextUriAsync()
+    {
+        if (_likedSongsContextUri != null)
+            return _likedSongsContextUri;
+
+        var profile = await GetUserProfileAsync();
+        if (string.IsNullOrEmpty(profile?.Id))
+            return "spotify:collection:tracks";
+
+        return _likedSongsContextUri = $"spotify:user:{profile.Id}:collection";
     }
 
     public async Task<SpotifyPlayerState?> GetNowPlayingAsync()

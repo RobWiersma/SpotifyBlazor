@@ -362,7 +362,7 @@
 
         // The position is within all liked songs, not just this page
         await Auth.PlayTrackInContextAsync(
-            "spotify:collection:tracks",
+            await Auth.GetLikedSongsContextUriAsync(),
             _offset + index);
     }
 

@@ -631,9 +631,6 @@ public class SpotifyAuthService
         _webPlayerSettled.TrySetResult(null);   // stop anyone waiting for it
     }
 
-    // True once the user moves playback to another device from the device menu
-    private bool _userChoseOtherDevice;
-
     private static TaskCompletionSource<string?> NewSettledSource() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -651,18 +648,25 @@ public class SpotifyAuthService
         return winner == settled ? settled.Result : null;
     }
 
-    // PUT /me/player/play. Goes to the browser's web player by default; if the user picked another
-    // device, or the web player can't play, it goes to Spotify's active device instead.
+    // PUT /me/player/play. Follows Spotify's active device, so moving playback to a phone (in the
+    // Spotify app or our device menu) sticks. With no other active device it goes to the browser's
+    // web player; if that can't play either, Spotify picks (or 404s).
     private async Task<HttpResponseMessage> SendPlayAsync(object? body)
     {
-        if (!_userChoseOtherDevice)
-        {
-            var webPlayerId = await WaitForWebPlayerAsync(TimeSpan.FromSeconds(8));
-            if (webPlayerId != null)
-                return await SendPlayRequestAsync(body, webPlayerId);
+        var active = (await GetNowPlayingAsync())?.Device;
 
-            _logger.LogInformation("Play: web player unavailable, using the active device");
+        if (active is { IsActive: true, IsRestricted: false } &&
+            !string.IsNullOrEmpty(active.Id) && active.Id != _fallbackDeviceId)
+        {
+            _logger.LogInformation("Play: following the active device {Device}", active.Name);
+            return await SendPlayRequestAsync(body, active.Id);
         }
+
+        var webPlayerId = await WaitForWebPlayerAsync(TimeSpan.FromSeconds(8));
+        if (webPlayerId != null)
+            return await SendPlayRequestAsync(body, webPlayerId);
+
+        _logger.LogInformation("Play: web player unavailable, letting Spotify pick the device");
 
         // No device named: Spotify uses the active one, or 404s if there's none.
         // That 404 is handled here, so keep it out of the generic error toasts.
@@ -1333,11 +1337,7 @@ public class SpotifyAuthService
         Console.WriteLine(await res.Content.ReadAsStringAsync());
 
         if (res.IsSuccessStatusCode)
-        {
-            // Play keeps going to the device the user picked; picking the browser again restores the default
-            _userChoseOtherDevice = deviceId != _fallbackDeviceId;
             await NotifyPlaybackChangedAsync();
-        }
 
         return res.IsSuccessStatusCode;
     }

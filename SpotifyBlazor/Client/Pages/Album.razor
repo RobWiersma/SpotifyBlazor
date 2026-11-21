@@ -43,8 +43,20 @@
             </div>
         </div>
 
+        <div class="track-toolbar">
+            <LengthFilter @bind-Minutes="_minMinutes" />
+        </div>
+
+        @if (_minMinutes > 0 && !VisibleTracks.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">⏱️</div>
+                <p>No songs on this album are longer than @_minMinutes min.</p>
+            </div>
+        }
+
         <div class="track-list">
-            @foreach (var trackObj in album.Tracks.Items)
+            @foreach (var trackObj in VisibleTracks)
             {
                 <div class="track-row" @onclick="() => Play(trackObj)">
 
@@ -78,6 +90,12 @@
     [Parameter] public string AlbumId { get; set; } = "";
 
     private SpotifyAlbum? album;
+
+    private double _minMinutes;
+
+    private IEnumerable<SpotifyTrack> VisibleTracks =>
+        album?.Tracks.Items.Where(t => LengthFilter.Passes(t.DurationMs, _minMinutes))
+        ?? Enumerable.Empty<SpotifyTrack>();
     private SpotifyArtist? artist;
 
     private HashSet<string> _favoriteTracks = new();
@@ -233,9 +251,5 @@
 
     // --- HELPERS ---
 
-    private string FormatTime(int ms)
-    {
-        var ts = TimeSpan.FromMilliseconds(ms);
-        return $"{ts.Minutes}:{ts.Seconds:D2}";
-    }
+    private string FormatTime(int ms) => LengthFilter.Format(ms);
 }

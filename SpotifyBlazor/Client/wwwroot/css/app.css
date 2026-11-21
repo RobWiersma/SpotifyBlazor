@@ -1437,6 +1437,53 @@ a {
         font-weight: 600;
     }
 
+/* "Longer than" song length picker beside the search chips */
+.length-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+    .length-filter select {
+        background: rgba(0, 0, 0, 0.25);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+        padding: 5px 12px;
+        font-size: 0.9rem;
+    }
+
+        .length-filter select.on {
+            background: #fff;
+            color: #000;
+            font-weight: 600;
+        }
+
+        .length-filter select option {
+            color: #000;
+        }
+
+/* Holds the length picker above a song list (albums, playlists, liked, history) */
+.track-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+}
+
+.length-filter-status {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.9rem;
+    margin: -8px 0 12px;
+}
+
+.length-filter-more {
+    margin: 16px 0;
+    text-align: center;
+}
+
 /* --- Buttons --- */
 .pill-btn {
     background: rgba(0, 0, 0, 0.25);

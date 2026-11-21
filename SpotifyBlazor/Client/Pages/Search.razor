@@ -1,4 +1,4 @@
-@page "/search"
+﻿@page "/search"
 @implements IDisposable
 @inject NavigationManager Nav
 @inject SpotifyAuthService Auth
@@ -36,6 +36,8 @@
                         @label
                     </button>
                 }
+
+                <LengthFilter Minutes="_minMinutes" MinutesChanged="OnMinLengthChanged" />
             </div>
 
             @if (_isSearching)
@@ -69,7 +71,14 @@
                         @RenderAll()
                         break;
                     case "track":
-                        @RenderSongs(Tracks, showAlbum: true)
+                        @if (_minMinutes > 0)
+                        {
+                            @RenderLongTracks()
+                        }
+                        else
+                        {
+                            @RenderSongs(Tracks, showAlbum: true)
+                        }
                         break;
                     case "artist":
                         @RenderArtists(Artists)
@@ -100,6 +109,25 @@
         ("all", "All"), ("track", "Songs"), ("artist", "Artists"), ("album", "Albums")
     };
 
+    // --- "Longer than" filter ---
+    // Spotify search can't filter by length, so this pages through the song results
+    // (Spotify stops at 1,000) and keeps the long ones.
+    private const int SpotifyMaxOffset = 1000;
+    private const int MatchesPerBatch = 20;
+    private const int RequestsPerBatch = 8;
+    private const int ResultsPerBatch = 200;
+
+    private double _minMinutes;
+    private readonly List<SearchResult> _longTracks = new();
+    private int _scanned;
+    private int _total = -1;        // -1 until Spotify has said how many songs match
+    private bool _scanning;
+    private bool _scanFailed;
+    private int _scanGeneration;    // bumped on every reset so an older scan stops
+
+    private bool CanScanMore =>
+        _scanned < (_total < 0 ? SpotifyMaxOffset : Math.Min(_total, SpotifyMaxOffset));
+
     private IEnumerable<SearchResult> Tracks => _results.Where(r => r.Type == "track");
     private IEnumerable<SearchResult> Artists => _results.Where(r => r.Type == "artist");
     private IEnumerable<SearchResult> Albums => _results.Where(r => r.Type == "album");
@@ -124,10 +152,18 @@
             return;
 
         _lastQuery = Q;
-        _filter = "all";
+
+        // A length filter carries over to a new search, showing its songs straight away
+        _filter = _minMinutes > 0 ? "track" : "all";
+        ResetLongScan();
 
         if (Auth.State == LoginState.LoggedIn)
+        {
             await RunSearch();
+
+            if (_minMinutes > 0)
+                await ScanMoreAsync();
+        }
     }
 
     private async void HandleLoginStateChanged(LoginState state)
@@ -190,6 +226,94 @@
     }
 
     private void SetFilter(string filter) => _filter = filter;
+
+    private async Task OnMinLengthChanged(double minutes)
+    {
+        _minMinutes = minutes;
+        ResetLongScan();
+
+        if (_minMinutes > 0)
+        {
+            _filter = "track";
+            await ScanMoreAsync();
+        }
+    }
+
+    private void ResetLongScan()
+    {
+        _scanGeneration++;
+        _longTracks.Clear();
+        _scanned = 0;
+        _total = -1;
+        _scanning = false;
+        _scanFailed = false;
+    }
+
+    // Pages through song results until this batch has found enough long songs,
+    // made enough requests, or reached the end
+    private async Task ScanMoreAsync()
+    {
+        if (_scanning || string.IsNullOrWhiteSpace(Q) || _minMinutes <= 0)
+            return;
+
+        var generation = _scanGeneration;
+        var query = Q;
+        var minMs = _minMinutes * 60_000;  // fractional minutes compare fine against whole ms
+        var found = 0;
+        var requests = 0;
+
+        _scanning = true;
+        _scanFailed = false;
+        StateHasChanged();
+
+        try
+        {
+            // Look through about 200 results per batch, whatever page size Spotify allows this app
+            while (found < MatchesPerBatch &&
+                   requests < Math.Max(RequestsPerBatch, ResultsPerBatch / Auth.SearchPageSize) &&
+                   CanScanMore)
+            {
+                var (tracks, total) = await Auth.SearchTracksAsync(query, _scanned);
+
+                if (generation != _scanGeneration)
+                    return;     // the filter or search changed meanwhile
+
+                requests++;
+                _total = total;
+                _scanned += tracks.Count;
+
+                if (tracks.Count == 0)
+                {
+                    _total = _scanned;  // Spotify ran out before its own count
+                    break;
+                }
+
+                foreach (var t in tracks.Where(t => t.DurationMs >= minMs))
+                {
+                    if (_longTracks.All(x => x.Id != t.Id))
+                    {
+                        _longTracks.Add(t);
+                        found++;
+                    }
+                }
+
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            if (generation == _scanGeneration)
+                _scanFailed = true;
+        }
+        finally
+        {
+            if (generation == _scanGeneration)
+            {
+                _scanning = false;
+                StateHasChanged();
+            }
+        }
+    }
 
     // --- RENDERING ---
 
@@ -308,6 +432,43 @@
         </div>
     };
 
+    private RenderFragment RenderLongTracks() => __builder =>
+    {
+        <p class="length-filter-status">
+            @if (_scanning)
+            {
+                <span>Looking through songs… @_longTracks.Count longer than @_minMinutes min in the first @_scanned results so far</span>
+            }
+            else if (_scanFailed)
+            {
+                <span>Search stopped early. @_longTracks.Count songs found in the first @_scanned results.</span>
+            }
+            else
+            {
+                <span>@_longTracks.Count songs longer than @_minMinutes min in the first @_scanned of @(Math.Min(Math.Max(_total, 0), SpotifyMaxOffset)) results</span>
+            }
+        </p>
+
+        @if (_longTracks.Any())
+        {
+            @RenderSongs(_longTracks, showAlbum: true)
+        }
+        else if (!_scanning)
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">⏱️</div>
+                <p>No songs longer than @_minMinutes min found yet.</p>
+            </div>
+        }
+
+        @if (!_scanning && (CanScanMore || _scanFailed))
+        {
+            <div class="length-filter-more">
+                <button class="pill-btn" @onclick="ScanMoreAsync">@(_scanFailed ? "Try again" : "Search deeper")</button>
+            </div>
+        }
+    };
+
     private RenderFragment RenderArtists(IEnumerable<SearchResult> artists) => __builder =>
     {
         <div class="card-grid">
@@ -423,9 +584,5 @@
         _ => type
     };
 
-    private static string FormatDuration(int ms)
-    {
-        var ts = TimeSpan.FromMilliseconds(ms);
-        return $"{ts.Minutes}:{ts.Seconds:D2}";
-    }
+    private static string FormatDuration(int ms) => LengthFilter.Format(ms);
 }

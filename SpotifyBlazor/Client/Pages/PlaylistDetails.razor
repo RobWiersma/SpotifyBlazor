@@ -37,8 +37,20 @@
             </div>
         </div>
 
+        <div class="track-toolbar">
+            <LengthFilter @bind-Minutes="_minMinutes" />
+        </div>
+
+        @if (_minMinutes > 0 && !VisibleTracks.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">⏱️</div>
+                <p>No songs in this playlist are longer than @_minMinutes min.</p>
+            </div>
+        }
+
         <div class="track-list">
-            @foreach (var t in Tracks.Where(i => i.Track != null))
+            @foreach (var t in VisibleTracks)
             {
                 <div class="track-row" @onclick="@(() => PlayTrack(t))">
 
@@ -94,6 +106,11 @@
     public List<PlaylistTrackItem> Tracks { get; set; } = new();
 
     private HashSet<string> _favoriteTracks = new();
+
+    private double _minMinutes;
+
+    private IEnumerable<PlaylistTrackItem> VisibleTracks =>
+        Tracks.Where(i => i.Track != null && LengthFilter.Passes(i.Track.DurationMs, _minMinutes));
 
 
     // --- INIT ---
@@ -285,9 +302,5 @@
 
     // --- HELPERS ---
 
-    private string FormatDuration(int ms)
-    {
-        var ts = TimeSpan.FromMilliseconds(ms);
-        return $"{ts.Minutes}:{ts.Seconds:D2}";
-    }
+    private string FormatDuration(int ms) => LengthFilter.Format(ms);
 }

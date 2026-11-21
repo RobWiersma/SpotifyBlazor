@@ -1049,25 +1049,7 @@ public class SpotifyAuthService
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         // Tracks
-        foreach (var item in Items(json, "tracks"))
-        {
-            var album = item.TryGetProperty("album", out var a) ? a : default;
-
-            results.Add(new SearchResult
-            {
-                Id = Str(item, "id"),
-                Uri = Str(item, "uri"),
-                Type = "track",
-                Name = Str(item, "name"),
-                ImageUrl = FirstImage(album),
-                Artists = ParseArtists(item),
-                DurationMs = item.TryGetProperty("duration_ms", out var d) ? d.GetInt32() : 0,
-                TrackNumber = item.TryGetProperty("track_number", out var n) ? n.GetInt32() : 0,
-                AlbumId = Str(album, "id"),
-                AlbumUri = Str(album, "uri"),
-                AlbumName = Str(album, "name")
-            });
-        }
+        results.AddRange(Items(json, "tracks").Select(ParseSearchTrack));
 
         // Artists
         foreach (var item in Items(json, "artists"))
@@ -1101,24 +1083,91 @@ public class SpotifyAuthService
 
         _logger.LogInformation("SearchAsync: Total results={Count}", results.Count);
         return results;
+    }
+
+    // Spotify caps search pages; 50 is the documented maximum, and some apps get 10
+    private int _searchPageSize = 50;
+
+    // One page of song results, plus how many Spotify says match in total.
+    // Search has no length filter, so the Search page pages through these and filters itself.
+    public async Task<(List<SearchResult> Tracks, int Total)> SearchTracksAsync(string query, int offset)
+    {
+        await RefreshIfNeededAsync();
+
+        while (true)
+        {
+            var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}" +
+                      $"&type=track&limit={_searchPageSize}&offset={offset}";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+
+            // A smaller page size is retried below, so don't toast a 400 for the larger one
+            if (_searchPageSize > 10)
+                request.Options.Set(ErrorNotificationHandler.QuietBadRequest, true);
+
+            var response = await _http.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest && _searchPageSize > 10)
+            {
+                _logger.LogInformation("SearchTracksAsync: limit {Limit} refused, using 10", _searchPageSize);
+                _searchPageSize = 10;
+                continue;
+            }
+
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Spotify search failed: {response.StatusCode}", null, response.StatusCode);
+
+            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            var total = json.TryGetProperty("tracks", out var tracks) &&
+                        tracks.TryGetProperty("total", out var t) && t.ValueKind == JsonValueKind.Number
+                ? t.GetInt32()
+                : 0;
+
+            return (Items(json, "tracks").Select(ParseSearchTrack).ToList(), total);
+        }
+    }
+
+    public int SearchPageSize => _searchPageSize;
+
+    private static SearchResult ParseSearchTrack(JsonElement item)
+    {
+        var album = item.TryGetProperty("album", out var a) ? a : default;
+
+        return new SearchResult
+        {
+            Id = Str(item, "id"),
+            Uri = Str(item, "uri"),
+            Type = "track",
+            Name = Str(item, "name"),
+            ImageUrl = FirstImage(album),
+            Artists = ParseArtists(item),
+            DurationMs = item.TryGetProperty("duration_ms", out var d) ? d.GetInt32() : 0,
+            TrackNumber = item.TryGetProperty("track_number", out var n) ? n.GetInt32() : 0,
+            AlbumId = Str(album, "id"),
+            AlbumUri = Str(album, "uri"),
+            AlbumName = Str(album, "name")
+        };
+    }
 
         // --- JSON helpers: Spotify sometimes returns null items or empty image lists ---
 
-        static IEnumerable<JsonElement> Items(JsonElement root, string section) =>
+        private static IEnumerable<JsonElement> Items(JsonElement root, string section) =>
             root.TryGetProperty(section, out var s) &&
             s.TryGetProperty("items", out var items) &&
             items.ValueKind == JsonValueKind.Array
                 ? items.EnumerateArray().Where(i => i.ValueKind == JsonValueKind.Object)
                 : Enumerable.Empty<JsonElement>();
 
-        static string Str(JsonElement el, string name) =>
+        private static string Str(JsonElement el, string name) =>
             el.ValueKind == JsonValueKind.Object &&
             el.TryGetProperty(name, out var v) &&
             v.ValueKind == JsonValueKind.String
                 ? v.GetString() ?? ""
                 : "";
 
-        static string FirstImage(JsonElement el) =>
+        private static string FirstImage(JsonElement el) =>
             el.ValueKind == JsonValueKind.Object &&
             el.TryGetProperty("images", out var imgs) &&
             imgs.ValueKind == JsonValueKind.Array &&
@@ -1126,13 +1175,12 @@ public class SpotifyAuthService
                 ? Str(imgs[0], "url")
                 : "";
 
-        static List<SpotifyArtist> ParseArtists(JsonElement el) =>
+        private static List<SpotifyArtist> ParseArtists(JsonElement el) =>
             el.TryGetProperty("artists", out var arts) && arts.ValueKind == JsonValueKind.Array
                 ? arts.EnumerateArray()
                       .Select(x => new SpotifyArtist { Id = Str(x, "id"), Name = Str(x, "name") })
                       .ToList()
                 : new List<SpotifyArtist>();
-    }
 
     public async Task<SpotifyPlaylistResponse> GetUserPlaylistsAsync()
     {
@@ -1182,24 +1230,42 @@ public class SpotifyAuthService
     {
         _logger.LogInformation("GetPlaylistTracksAsync: playlistId={PlaylistId}", playlistId);
 
-        await RefreshIfNeededAsync();
+        // Spotify returns 100 songs per page; follow "next" so long playlists load in full
+        // (capped so a huge playlist can't keep the page busy forever)
+        const int maxPages = 50;
 
-        var req = new HttpRequestMessage(HttpMethod.Get,
-            $"https://api.spotify.com/v1/playlists/{playlistId}/items");
+        var items = new List<PlaylistTrackItem>();
+        string? url = $"https://api.spotify.com/v1/playlists/{playlistId}/items";
 
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
+        for (var page = 0; url != null && page < maxPages; page++)
+        {
+            await RefreshIfNeededAsync();
 
-        var start = DateTime.UtcNow;
-        var response = await _http.SendAsync(req);
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        _logger.LogInformation("GetPlaylistTracksAsync: Response {StatusCode} in {ElapsedMs}ms",
-            response.StatusCode,
-            (DateTime.UtcNow - start).TotalMilliseconds);
+            var start = DateTime.UtcNow;
+            var response = await _http.SendAsync(req);
 
-        var raw = await response.Content.ReadAsStringAsync();
-        var result = JsonSerializer.Deserialize<PlaylistTrackResponse>(raw);
+            _logger.LogInformation("GetPlaylistTracksAsync: page {Page} Response {StatusCode} in {ElapsedMs}ms",
+                page,
+                response.StatusCode,
+                (DateTime.UtcNow - start).TotalMilliseconds);
 
-        return result.Items;
+            if (!response.IsSuccessStatusCode)
+                break;
+
+            var raw = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<PlaylistTrackResponse>(raw);
+
+            if (result?.Items == null)
+                break;
+
+            items.AddRange(result.Items);
+            url = string.IsNullOrEmpty(result.Next) ? null : result.Next;
+        }
+
+        return items;
     }
 
     public async Task<List<SpotifyAlbum>> GetArtistAlbumsFirstPage(string artistId)

@@ -32,8 +32,20 @@
     }
     else
     {
+        <div class="track-toolbar">
+            <LengthFilter Minutes="_minMinutes" MinutesChanged="OnMinLengthChanged" />
+        </div>
+
+        @if (_minMinutes > 0 && !FilteredItems.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">⏱️</div>
+                <p>None of your recent songs are longer than @_minMinutes min.</p>
+            </div>
+        }
+
         <div class="track-list">
-            @foreach (var item in PagedItems.Where(i => i.Track != null))
+            @foreach (var item in PagedItems)
             {
                 <div class="track-row" @onclick="@(() => PlayTrack(item.Track))">
 
@@ -98,16 +110,26 @@
     private int PageSize = 20;
     private int CurrentPage = 0;
 
-    private int TotalPages =>
-        _history == null
-            ? 1
-            : (int)Math.Ceiling(_history.Items.Count / (double)PageSize);
+    private double _minMinutes;
+
+    private List<PlayHistoryItem> FilteredItems =>
+        _history?.Items
+            .Where(i => i.Track != null && LengthFilter.Passes(i.Track.DurationMs, _minMinutes))
+            .ToList()
+            ?? new List<PlayHistoryItem>();
+
+    private int TotalPages => (int)Math.Ceiling(FilteredItems.Count / (double)PageSize);
 
     private IEnumerable<PlayHistoryItem> PagedItems =>
-        _history?.Items
+        FilteredItems
             .Skip(CurrentPage * PageSize)
-            .Take(PageSize)
-            ?? Enumerable.Empty<PlayHistoryItem>();
+            .Take(PageSize);
+
+    private void OnMinLengthChanged(double minutes)
+    {
+        _minMinutes = minutes;
+        CurrentPage = 0;
+    }
 
 
     // --- INIT ---

@@ -1,0 +1,36 @@
+@using System.Globalization
+@* "Longer than" picker used on every page that lists songs. Bind with @bind-Minutes; 0 means any length. *@
+
+<label class="length-filter">
+    Longer than
+    <select class="@(Minutes > 0 ? "on" : "")" value="@Minutes.ToString(CultureInfo.InvariantCulture)" @onchange="OnChanged">
+        @foreach (var m in Options)
+        {
+            <option value="@m.ToString(CultureInfo.InvariantCulture)">@(m == 0 ? "any length" : $"{m.ToString(CultureInfo.InvariantCulture)} min")</option>
+        }
+    </select>
+</label>
+
+@code {
+    public static readonly double[] Options = { 0, 1, 1.5, 2, 3, 5, 8, 10, 15, 20, 30 };
+
+    [Parameter] public double Minutes { get; set; }
+    [Parameter] public EventCallback<double> MinutesChanged { get; set; }
+
+    private Task OnChanged(ChangeEventArgs e) =>
+        MinutesChanged.InvokeAsync(
+            double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var m) ? m : 0);
+
+    // True when a song of this length should show under the picked minimum
+    public static bool Passes(int durationMs, double minMinutes) =>
+        minMinutes <= 0 || durationMs >= minMinutes * 60_000;
+
+    // m:ss, or h:mm:ss for long mixes and live sets
+    public static string Format(int ms)
+    {
+        var ts = TimeSpan.FromMilliseconds(ms);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
+            : $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+}

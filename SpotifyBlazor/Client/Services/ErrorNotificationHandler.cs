@@ -10,6 +10,9 @@ public class ErrorNotificationHandler : DelegatingHandler
     // Set on a request whose 404 the caller handles itself, so no toast is shown for it
     public static readonly HttpRequestOptionsKey<bool> QuietNotFound = new("QuietNotFound");
 
+    // Set on a request whose 400 the caller retries differently, so no toast is shown for it
+    public static readonly HttpRequestOptionsKey<bool> QuietBadRequest = new("QuietBadRequest");
+
     private readonly NotificationService _notifications;
 
     public ErrorNotificationHandler(NotificationService notifications)
@@ -40,8 +43,10 @@ public class ErrorNotificationHandler : DelegatingHandler
             throw;
         }
 
-        var quiet = response.StatusCode == HttpStatusCode.NotFound &&
-                    request.Options.TryGetValue(QuietNotFound, out var q) && q;
+        var quiet = (response.StatusCode == HttpStatusCode.NotFound &&
+                     request.Options.TryGetValue(QuietNotFound, out var q) && q) ||
+                    (response.StatusCode == HttpStatusCode.BadRequest &&
+                     request.Options.TryGetValue(QuietBadRequest, out var b) && b);
 
         if (!response.IsSuccessStatusCode && !quiet)
         {

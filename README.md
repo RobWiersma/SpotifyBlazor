@@ -46,6 +46,11 @@
 </table>
 
 <p align="center">
+  <img src="docs/screenshots/visualizer-mic.gif" alt="Live recording of Now Playing for Ace Frehley's New York Groove with 🎙️ Mic on: the Ring around the cover and the bars along the bottom jump in time with the song as the microphone hears it from the speakers" width="100%" />
+  <br/><sub><b>🎙️ Mic, recorded live</b> — the song playing out loud through the speakers, picked up by a webcam mic, with Ring + Bars reacting to what it hears</sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/search.jpg" alt="Search results for Daft Punk: top result, songs, and artist cards" width="100%" />
   <br/><sub><b>Search</b> — top result, songs and artists, with filter chips</sub>
 </p>

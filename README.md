@@ -24,8 +24,8 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/visualizer.jpg" alt="Now Playing for The Chemical Brothers' Elektrobank, with Ring, Particles and Tunnel layered: rainbow bars circling the cover, sparks flying out, and glowing pink squares expanding behind it" width="100%" />
-  <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, mixed and matched (here Ring + Particles + Tunnel), hitting harder in the chorus, or reacting to your mic with 🎙️ Mic</sub>
+  <img src="docs/screenshots/visualizer-mic.gif" alt="Live recording of Now Playing for Ace Frehley's New York Groove with 🎙️ Mic on: the Ring around the cover and the bars along the bottom jump in time with the song as the microphone hears it from the speakers" width="100%" />
+  <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, mixed and matched, hitting harder in the chorus, or reacting to your mic with 🎙️ Mic (recorded live here: the song playing out loud, picked up by a webcam mic, with Ring + Bars reacting)</sub>
 </p>
 
 <table>
@@ -44,11 +44,6 @@
 </td>
 </tr>
 </table>
-
-<p align="center">
-  <img src="docs/screenshots/visualizer-mic.gif" alt="Live recording of Now Playing for Ace Frehley's New York Groove with 🎙️ Mic on: the Ring around the cover and the bars along the bottom jump in time with the song as the microphone hears it from the speakers" width="100%" />
-  <br/><sub><b>🎙️ Mic, recorded live</b> — the song playing out loud through the speakers, picked up by a webcam mic, with Ring + Bars reacting to what it hears</sub>
-</p>
 
 <p align="center">
   <img src="docs/screenshots/search.jpg" alt="Search results for Daft Punk: top result, songs, and artist cards" width="100%" />

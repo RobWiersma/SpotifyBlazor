@@ -1,0 +1,92 @@
+@page "/about"
+
+@* A plain page about the app, readable without signing in: for visitors, and so search engines
+   have real text to index (every other page shows a visitor's own library or the demo) *@
+
+@inject SpotifyAuthService Auth
+@inject NavigationManager Nav
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+
+<PageTitle>About SpotifyBlazor – a Spotify web player with live audio visualizers</PageTitle>
+
+<AnimatedPage>
+    <div class="about-page">
+        <h2 class="page-title">About SpotifyBlazor</h2>
+
+        <p class="about-lead">
+            SpotifyBlazor is a web player for your Spotify library, built with Blazor WebAssembly and
+            .NET 8. Sign in with Spotify to browse and play your own music right in the browser, with
+            synced lyrics and Winamp style visualizers, or try the demo with free music, no account needed.
+        </p>
+
+        @if (Auth.State == LoginState.NotLoggedIn)
+        {
+            <p>
+                <button class="btn btn-outline-light" @onclick="StartDemo">Try the demo</button>
+            </p>
+        }
+
+        <h3>What you can do</h3>
+        <ul>
+            <li><b>Play in the browser.</b> The tab becomes a Spotify Connect device, and you can hand
+                playback between it and your phone, desktop app or speakers.</li>
+            <li><b>Browse your library:</b> Liked Songs, saved albums and podcasts, playlists, artists
+                and your recently played history.</li>
+            <li><b>Search</b> songs, artists and albums, with filter chips and a <i>Longer than</i>
+                filter (1 to 30 minutes) to find long tracks, which also works on albums, playlists
+                and Liked Songs.</li>
+            <li><b>Synced lyrics</b> on the Now Playing screen, highlighted line by line.</li>
+            <li><b>Music videos:</b> 🎬 Video finds the song's video and plays it in the app.</li>
+            <li><b>🌈 Visualizers</b> in the album art's colors, in seven styles you can mix and match:
+                Bars, Ring, Wave, Particles, Tunnel, Mirror and Shatter. They get bigger in the chorus,
+                and 🎙️ Mic makes them react to what your microphone hears.</li>
+            <li><b>Works on phones</b>, with a compact player bar and menu.</li>
+        </ul>
+
+        <h3>Demo mode</h3>
+        <p>
+            No Spotify account? <b>Try the demo</b> opens a small built-in library of free songs that
+            really play, in a few playlists and albums. Everything works the same way, and because the
+            songs come from this site, the visualizers draw the actual audio without the microphone.
+        </p>
+
+        <h3>How it's built</h3>
+        <ul>
+            <li>A <b>Blazor WebAssembly</b> app in C#, served by an <b>ASP.NET Core</b> server on
+                <b>.NET 8</b>.</li>
+            <li>The <b>Spotify Web API</b> and <b>Web Playback SDK</b> for your library and in-browser
+                playback, with OAuth sign-in and automatic token refresh.</li>
+            <li>Hosted on <b>Azure App Service</b> behind <b>Cloudflare</b>, with Application Insights
+                telemetry.</li>
+            <li>Lyrics from <a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a>.
+                The visualizers are drawn with the Web Audio API and canvas.</li>
+        </ul>
+        <p>
+            The source code is on GitHub:
+            <a href="https://github.com/RobWiersma/SpotifyBlazor" target="_blank" rel="noopener">RobWiersma/SpotifyBlazor</a>.
+        </p>
+
+        <h3>Privacy</h3>
+        <p>
+            Your Spotify sign-in stays between your browser, this site and Spotify. For simple visitor
+            counts, the site keeps a random id your browser makes up and the pages you open, without
+            your IP address or search terms.
+        </p>
+
+        <h3>Credits</h3>
+        <DemoCredit />
+        <p class="about-note">
+            SpotifyBlazor is a personal project and isn't affiliated with or endorsed by Spotify.
+            Spotify is a trademark of Spotify AB.
+        </p>
+    </div>
+</AnimatedPage>
+
+@code {
+    private async Task StartDemo()
+    {
+        await Auth.StartDemoAsync();
+        Nav.NavigateTo("/");
+    }
+}

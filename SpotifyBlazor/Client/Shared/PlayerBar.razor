@@ -138,6 +138,7 @@
             }
 
             <button class="mobile-option" @onclick="GoHome">🏡 Home</button>
+            <a class="mobile-option" href="/about" @onclick="() => showMobileTools = false">ℹ️ About</a>
 
             @if (Auth.State == LoginState.LoggedIn && current?.Item != null)
             {

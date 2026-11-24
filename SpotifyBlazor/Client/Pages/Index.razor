@@ -1,6 +1,6 @@
 ﻿@page "/"
 
-<PageTitle>SpotifyBlazor</PageTitle>
+<PageTitle>SpotifyBlazor – Spotify player with live audio visualizers</PageTitle>
 
 @inject SpotifyAuthService Auth
 @inject NavigationManager Nav
@@ -37,6 +37,12 @@
     }
 
     <div class="card-grid">
+        <a href="/nowplaying" class="media-card">
+            <div class="media-card-image media-card-placeholder">🎧</div>
+            <div class="media-card-title">Now Playing</div>
+            <div class="media-card-subtitle">Lyrics, video and visualizers</div>
+        </a>
+
         <a href="/liked" class="media-card">
             <div class="media-card-image media-card-placeholder">💚</div>
             <div class="media-card-title">Liked</div>

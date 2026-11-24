@@ -11,6 +11,12 @@
 @using SpotifyBlazor.Client.Layout
 @using SpotifyBlazor.Client.Services
 
+@* Tells search engines each page's one true address: the public domain, without query strings,
+   so the azurewebsites.net copy and ?q= variants aren't indexed as separate pages *@
+<HeadContent>
+    <link rel="canonical" href="@CanonicalUrl" />
+</HeadContent>
+
 <div class="layout-root">
 
     <div class="layout-content">
@@ -47,6 +53,9 @@
 
 @code {
     string SearchText = "";
+
+    private const string PublicSite = "https://spotifyblazor.bswiersma.com/";
+    private string CanonicalUrl => PublicSite + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
     CancellationTokenSource? debounceCts;
 
     // ---------------------------------------------------------

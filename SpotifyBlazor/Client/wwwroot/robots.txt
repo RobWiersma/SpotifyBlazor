@@ -1,0 +1,7 @@
+# Search engines: index the public home page; skip sign-in callbacks, the API and owner-only pages
+User-agent: *
+Disallow: /spotcallback
+Disallow: /api/
+Disallow: /stats
+
+Sitemap: https://spotifyblazor.bswiersma.com/sitemap.xml

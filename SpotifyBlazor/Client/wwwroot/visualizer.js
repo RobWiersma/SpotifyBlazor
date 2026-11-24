@@ -4,6 +4,7 @@
 // sine "noise", a steady kick at a tempo picked from the track id, and slow
 // swells. It rises while playing and settles when paused.
 // Mic mode instead listens through the microphone and draws what it hears.
+// In demo mode the songs play in this page, so it draws the actual audio instead.
 // The audio is only measured in the browser, never recorded or sent anywhere.
 //
 // Styles: bars along the bottom, a ring around the album cover, flowing waves,
@@ -58,6 +59,11 @@ let flash = 0;              // burst when a line or chorus starts, fades out
 
 // Mic mode
 let mic;                    // { stream, audio, analyser, bins }
+let demoInput;              // { audio, analyser, bins, clean }: demo mode's songs, playing in this page
+
+// What the bars listen to: the mic when it's on, otherwise demo mode's songs, otherwise
+// nothing (generated motion)
+const live = () => mic ?? demoInput;
 let micPeak = 0.2;          // running loudness peak, so quiet and loud rooms both fill the bars
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -193,6 +199,20 @@ export async function setMic(on) {
     }
 }
 
+// Demo mode: draw the demo songs playing in this page. They're clean digital audio, so
+// there's no room noise to learn and subtract.
+export async function setDemoAudio(on) {
+    if (!on) {
+        demoInput = undefined;
+        return;
+    }
+
+    const { input } = await import("./demoaudio.js");
+    const { audio, analyser } = input();
+    demoInput = { audio, analyser, bins: new Uint8Array(analyser.frequencyBinCount), clean: true };
+    micPeak = 0.2;
+}
+
 function stopMic() {
     if (!mic) return;
 
@@ -313,7 +333,7 @@ function draw(now) {
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 22 * dpr * (1 + 0.6 * chorus + 0.5 * flash);
 
-    if (mic) {
+    if (live()) {
         // Let the peak decay slowly so the bars rescale when the music gets quieter; the
         // minimum keeps leftover noise from being stretched to full height
         micPeak = Math.max(micPeak * 0.997, 0.08);
@@ -404,7 +424,7 @@ function energyAt(d) {
 // True on a beat: the generated kick, or with the mic a jump in the bass
 function detectBeat(t, beat, bass) {
     let hit;
-    if (mic) {
+    if (live()) {
         hit = bass > bassAvg * 1.35 + 0.05 && t - lastBeatAt > 0.25;
         bassAvg += (bass - bassAvg) * 0.05;
     } else {
@@ -420,7 +440,7 @@ function stepBar(bar, x, { t, speed, kick, swell, boost }) {
     const center = Math.pow(1 - Math.abs(x), 1.5);
 
     let target;
-    if (mic) {
+    if (live()) {
         target = micLevel(Math.abs(x));
     } else {
         const noise =
@@ -437,8 +457,8 @@ function stepBar(bar, x, { t, speed, kick, swell, boost }) {
 
     // Rise fast, fall slowly, like a real meter. With the mic, jump almost straight to
     // what it hears so hits land on time.
-    const rise = mic ? 0.8 : 0.35;
-    const fall = mic ? 0.15 : 0.08;
+    const rise = live() ? 0.8 : 0.35;
+    const fall = live() ? 0.15 : 0.08;
     bar.value += (target - bar.value) * (target > bar.value ? rise : fall);
 }
 
@@ -747,13 +767,14 @@ const MIC_SLOTS = 48;
 // rises above that counts. The estimate sinks quickly in quiet moments and rises slowly,
 // so steady noise is learned (within ~15s if it gets louder) without soaking up the music.
 function readMic() {
-    const { analyser, audio, bins } = mic;
+    const src = live();
+    const { analyser, audio, bins } = src;
     analyser.getByteFrequencyData(bins);
     const hzPerBin = audio.sampleRate / analyser.fftSize;
 
-    if (!mic.noise) {
-        mic.noise = Array.from({ length: MIC_SLOTS }, () => ({ mean: -1, dev: 0 }));
-        mic.levels = new Float32Array(MIC_SLOTS);
+    if (!src.noise) {
+        src.noise = Array.from({ length: MIC_SLOTS }, () => ({ mean: -1, dev: 0 }));
+        src.levels = new Float32Array(MIC_SLOTS);
     }
 
     for (let k = 0; k < MIC_SLOTS; k++) {
@@ -767,7 +788,13 @@ function readMic() {
         for (let b = from; b <= to; b++) sum += bins[b];
         const level = sum / (to - from + 1);
 
-        const noise = mic.noise[k];
+        if (src.clean) {
+            src.levels[k] = level / 255 * (1 + d * 0.8);
+            micPeak = Math.max(micPeak, src.levels[k]);
+            continue;
+        }
+
+        const noise = src.noise[k];
         if (noise.mean < 0) {
             noise.mean = level; // first frame: assume it's background
             noise.frames = 0;
@@ -783,8 +810,8 @@ function readMic() {
         noise.mean += (level - noise.mean) * (level < noise.mean ? 0.05 : 0.001);
 
         // Treble is naturally quieter than bass, so tilt it up a little
-        mic.levels[k] = above / 255 * (1 + d * 0.8);
-        micPeak = Math.max(micPeak, mic.levels[k]);
+        src.levels[k] = above / 255 * (1 + d * 0.8);
+        micPeak = Math.max(micPeak, src.levels[k]);
     }
 }
 
@@ -792,7 +819,8 @@ function readMic() {
 function micLevel(d) {
     const f = Math.min(MIC_SLOTS - 1, Math.max(0, d * (MIC_SLOTS - 1)));
     const i = Math.floor(f);
-    const a = mic.levels[i], b = mic.levels[Math.min(MIC_SLOTS - 1, i + 1)];
+    const levels = live().levels;
+    const a = levels[i], b = levels[Math.min(MIC_SLOTS - 1, i + 1)];
     const value = a + (b - a) * (f - i);
 
     return Math.pow(Math.min(1, value / micPeak), 1.15) * 0.95;

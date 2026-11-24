@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 
 namespace SpotifyBlazor.Client.Services;
@@ -25,8 +25,9 @@ public class ErrorNotificationHandler : DelegatingHandler
     {
         var path = request.RequestUri?.AbsolutePath ?? "";
 
-        // Telemetry failures are expected before login and would just be noise
-        if (path.StartsWith("/api/telemetry", StringComparison.OrdinalIgnoreCase))
+        // Telemetry and visit-stat failures are expected before login and would just be noise
+        if (path.StartsWith("/api/telemetry", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/api/visit", StringComparison.OrdinalIgnoreCase))
             return await base.SendAsync(request, cancellationToken);
 
         var source = request.RequestUri?.Host.Contains("spotify.com") == true ? "Spotify" : "Server";

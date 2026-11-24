@@ -8,6 +8,8 @@
 
 [![Live demo](https://img.shields.io/badge/▶_Live_demo-1DB954?style=for-the-badge&logo=spotify&logoColor=white)](https://spotifyblazor.bswiersma.com/)
 
+No Spotify account? Click **Try the demo** on the site: a built-in library of free songs that really play, with the visualizer drawing the actual audio.
+
 ![.NET 8](https://img.shields.io/badge/.NET-8.0_LTS-512BD4?logo=dotnet&logoColor=white)
 ![Blazor WebAssembly](https://img.shields.io/badge/Blazor-WebAssembly-512BD4?logo=blazor&logoColor=white)
 ![Spotify Web API](https://img.shields.io/badge/Spotify-Web_API_%2B_Playback_SDK-1DB954?logo=spotify&logoColor=white)
@@ -78,6 +80,14 @@
 </table>
 
 ---
+
+## 🎧 Demo mode
+
+**Try the demo** (on the home page, in the header, or in the ☰ Menu on phones) runs the whole app without a Spotify account. Liked songs, playlists, albums, the artist page, Recently Played, search and the queue all work on a small built-in library. Its songs play in the page with an ordinary audio player, so the 🌈 Visualizer analyzes the real audio, with no mic needed.
+
+How it works: while demo mode is on, `DemoSpotifyHandler` answers the app's Spotify Web API calls from `DemoLibrary` in the same JSON shapes Spotify uses, so no page needs a demo branch. Likes and queue changes last until a reload. 🎬 Video is hidden because video search needs a signed-in user.
+
+Demo music by Kevin MacLeod ([incompetech.com](https://incompetech.com)), licensed under [Creative Commons: By Attribution 4.0](https://creativecommons.org/licenses/by/4.0/): *Funkorama*, *Disco Medusae*, *Club Diver*, *Local Forecast - Elevator*, *Volatile Reaction*, *Ouroboros*, *Voxel Revolution* and *Galactic Rap*. Each is trimmed to its first 90 seconds with a fade-out. The cover art is original.
 
 ## ✨ Features
 
@@ -227,6 +237,16 @@ Then open **https://127.0.0.1:7151** and log in with Spotify.
 ### ☁️ Deploying
 
 The app is published from Visual Studio to **Azure App Service**. Set the App Service stack to **.NET 8 (LTS)** under *Configuration → General settings* — a framework-dependent .NET 8 build won't start on an older runtime.
+
+The live site sits behind a Cloudflare Worker on the custom domain. The free F1 plan allows only 165 MB of outbound data a day, so the Worker caches demo mode's songs and covers at Cloudflare's edge, which means repeat plays don't count against Azure. Only `/demo/` is cached: those files never change, while the app's own files aren't fingerprinted and could go stale after a publish.
+
+```js
+// In the Worker's fetch handler, where it forwards the request to the App Service:
+const isDemoAsset = request.method === "GET" && new URL(request.url).pathname.startsWith("/demo/");
+return fetch(upstreamRequest, isDemoAsset
+    ? { cf: { cacheEverything: true, cacheTtl: 60 * 60 * 24 * 30 } }  // 30 days at the edge
+    : undefined);
+```
 
 ### 🏗️ Infrastructure as code (Terraform)
 

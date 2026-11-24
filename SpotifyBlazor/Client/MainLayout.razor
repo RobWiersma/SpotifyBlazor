@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject TelemetryService Telemetry
 @inject WebPlayerService WebPlayer
+@inject VisitTracker Visits
 @using SpotifyBlazor.Client.Shared
 @using SpotifyBlazor.Shared.Models
 @using SpotifyBlazor.Client.Layout
@@ -60,6 +61,9 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // JS interop isn't available until after the first render
+        if (firstRender)
+            Visits.Start();
+
         if (firstRender && Auth.State == LoginState.LoggedIn)
             await WebPlayer.StartAsync();
     }

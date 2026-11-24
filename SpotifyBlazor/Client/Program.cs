@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Components.Web;
+﻿using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using SpotifyBlazor.Client;
 using SpotifyBlazor.Client.Services;
@@ -10,13 +10,18 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<DemoLibrary>();
 
 builder.Services.AddScoped<HttpClient>(sp =>
 {
-    // Failed responses (Spotify or our API) pop up as toasts
+    // Failed responses (Spotify or our API) pop up as toasts. In demo mode, Spotify calls
+    // are answered by the demo library instead of going out.
     var handler = new ErrorNotificationHandler(sp.GetRequiredService<NotificationService>())
     {
-        InnerHandler = new HttpClientHandler()
+        InnerHandler = new DemoSpotifyHandler(sp.GetRequiredService<DemoLibrary>())
+        {
+            InnerHandler = new HttpClientHandler()
+        }
     };
 
     var client = new HttpClient(handler)
@@ -31,6 +36,7 @@ builder.Services.AddScoped<ConfigService>();
 builder.Services.AddScoped<SpotifyAuthService>();
 builder.Services.AddScoped<TelemetryService>();
 builder.Services.AddScoped<WebPlayerService>();
+builder.Services.AddScoped<VisitTracker>();
 
 var host = builder.Build();
 

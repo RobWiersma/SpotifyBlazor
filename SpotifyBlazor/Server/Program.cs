@@ -1,4 +1,4 @@
-using Microsoft.ApplicationInsights;
+﻿using Microsoft.ApplicationInsights;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
@@ -129,6 +129,17 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
             }));
 
+    // Page-view reports for visitor stats: one per page change, so generous
+    options.AddPolicy<string>("VisitSteady", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
     // Steady limiter for music video lookups (protects the YouTube quota)
     options.AddPolicy<string>("VideoSteady", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -140,6 +151,10 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             }));
 });
+
+// Visitor stats for the owner's /stats page (saved to a small file; see VisitStats)
+builder.Services.AddSingleton<VisitStats>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<VisitStats>());
 
 var app = builder.Build();
 
@@ -339,7 +354,8 @@ app.MapPost("/api/auth/spotify-login", async (
         issuer: config["Jwt:Issuer"],
         audience: config["Jwt:Audience"],
         claims: claims,
-        expires: DateTime.UtcNow.AddHours(2),
+        // Stays signed in for 30 days; the Spotify token itself is refreshed hourly as usual
+        expires: DateTime.UtcNow.AddDays(30),
         signingCredentials: creds);
 
     var jwt = new JwtSecurityTokenHandler().WriteToken(token);
@@ -389,6 +405,37 @@ app.MapPost("/api/telemetry", async (
 .RequireAuthorization()
 .RequireRateLimiting("TelemetryBurst")
 .RequireRateLimiting("TelemetrySteady");
+
+// VISITOR STATS
+// Every visitor's browser reports page views here: signed in, in demo mode, or signed out.
+// Signed-in users are recognized from our own login token, so names can't be faked.
+app.MapPost("/api/visit", (VisitRequest visit, ClaimsPrincipal user, VisitStats stats) =>
+{
+    var spotifyId = user.Identity?.IsAuthenticated == true
+        ? user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub)
+        : null;
+
+    stats.Record(visit, spotifyId, user.FindFirstValue("spotify_name"));
+    return Results.NoContent();
+})
+.RequireRateLimiting("VisitSteady");
+
+// Only the Spotify accounts listed in Stats:OwnerSpotifyIds (comma-separated) may see the stats
+static bool IsStatsOwner(ClaimsPrincipal user, IConfiguration config, out string? spotifyId)
+{
+    spotifyId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+    var owners = (config["Stats:OwnerSpotifyIds"] ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    return spotifyId != null && owners.Contains(spotifyId);
+}
+
+app.MapGet("/api/stats/access", (ClaimsPrincipal user, IConfiguration config) =>
+    Results.Ok(new StatsAccess { IsOwner = IsStatsOwner(user, config, out var id), SpotifyId = id }))
+.RequireAuthorization();
+
+app.MapGet("/api/stats", (ClaimsPrincipal user, IConfiguration config, VisitStats stats) =>
+    IsStatsOwner(user, config, out _) ? Results.Ok(stats.Summarize()) : Results.Forbid())
+.RequireAuthorization();
 
 // MUSIC VIDEO LOOKUP: finds the track's video on YouTube. The API key stays on the server.
 app.MapGet("/api/video", async (

@@ -65,13 +65,21 @@
                 <!-- Lyrics and video toggles -->
                 <div class="np-lyrics-toggle">
                     <button class="np-btn" @onclick="ToggleLyrics">🎤 Lyrics</button>
-                    <button class="np-btn" @onclick="ShowVideo">🎬 Video</button>
+                    @if (!Auth.IsDemo)
+                    {
+                        <!-- Video search runs on the server for signed-in users only -->
+                        <button class="np-btn" @onclick="ShowVideo">🎬 Video</button>
+                    }
                     <button class="np-btn @(_showVisualizer ? "np-btn-on" : "")" @onclick="ToggleVisualizer"
                             title="Winamp style Visualizers">🌈 Visualizer</button>
                     @if (_showVisualizer)
                     {
-                        <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
-                                title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
+                        @if (!Auth.IsDemo)
+                        {
+                            <!-- Demo songs play in the page, so the visualizer hears them without a mic -->
+                            <button class="np-btn @(_micOn ? "np-btn-on" : "")" @onclick="ToggleMic"
+                                    title="Make the visualizer react to what your microphone hears">🎙️ Mic</button>
+                        }
                         <button class="np-btn @(_showStylePicker ? "np-btn-on" : "")"
                                 @onclick="() => _showStylePicker = !_showStylePicker"
                                 title="Pick visualizer styles; several can be on at once">
@@ -98,6 +106,11 @@
                     <span class="np-link" @onclick="GoToAlbum">View Album</span>
                     <span class="np-link" @onclick="GoToArtist">View Artist</span>
                 </div>
+
+                @if (Auth.IsDemo)
+                {
+                    <DemoCredit />
+                }
 
             </div>
 
@@ -378,7 +391,11 @@
             _visualizerSentState = options.ToString();
             await _visualizerModule.InvokeVoidAsync("start", _visualizerCanvas, options);
 
-            if (_micWanted)
+            // Demo songs play in this page, so the visualizer can draw the real audio
+            if (Auth.IsDemo)
+                await _visualizerModule.InvokeVoidAsync("setDemoAudio", true);
+
+            if (_micWanted && !Auth.IsDemo)
                 await SetMicAsync(true);
         }
         else if (options.ToString() != _visualizerSentState)

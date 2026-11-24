@@ -447,3 +447,6 @@ override.tf.json
 *.secret.tfvars
 # Modules don't pin providers; the root modules (bootstrap, envs/*) do.
 infra/modules/**/.terraform.lock.hcl
+
+# Visitor stats saved by the server when running locally
+SpotifyBlazor/Server/App_Data/

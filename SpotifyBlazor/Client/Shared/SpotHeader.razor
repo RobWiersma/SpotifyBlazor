@@ -27,6 +27,10 @@
                 <button class="btn btn-success" @onclick="LoginToSpotify">
                     Login with Spotify
                 </button>
+                <button class="btn btn-outline-light" @onclick="StartDemo"
+                        title="Look around with built-in songs, no Spotify account needed">
+                    Try the demo
+                </button>
             </div>
         }
         else if (Auth.State == LoginState.LoggingIn)
@@ -41,6 +45,15 @@
                 Login failed
                 <button class="btn btn-success btn-sm" @onclick="LoginToSpotify">
                     Retry Login
+                </button>
+            </div>
+        }
+        else if (Auth.State == LoginState.LoggedIn && Auth.IsDemo)
+        {
+            <div class="px-3 py-2 demo-badge">
+                🎧 Demo mode
+                <button class="btn btn-outline-light btn-sm" @onclick="Logout">
+                    Exit demo
                 </button>
             </div>
         }
@@ -75,6 +88,12 @@
         var url = SpotifyLogin.AuthorizeUrl(Config);
         if (url != null)
             Navigation.NavigateTo(url, forceLoad: true);
+    }
+
+    private async Task StartDemo()
+    {
+        await Auth.StartDemoAsync();
+        Navigation.NavigateTo("/");
     }
 
     private async Task Logout()

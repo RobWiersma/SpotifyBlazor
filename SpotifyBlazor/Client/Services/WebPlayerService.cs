@@ -1,4 +1,4 @@
-using Microsoft.JSInterop;
+﻿using Microsoft.JSInterop;
 using SpotifyBlazor.Shared.Models;
 
 namespace SpotifyBlazor.Client.Services;
@@ -32,7 +32,8 @@ public class WebPlayerService : IAsyncDisposable
 
     public async Task StartAsync()
     {
-        if (_starting || _module != null || _auth.State != LoginState.LoggedIn)
+        // Demo mode plays its own songs in the page; Spotify's player needs a real account
+        if (_starting || _module != null || _auth.State != LoginState.LoggedIn || _auth.IsDemo)
             return;
 
         _starting = true;

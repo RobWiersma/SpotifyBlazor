@@ -1,0 +1,183 @@
+@page "/stats"
+@using System.Net
+@using System.Net.Http.Json
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@inject HttpClient Http
+@inject SpotifyAuthService Auth
+@implements IDisposable
+
+<PageTitle>Visitor stats · SpotifyBlazor</PageTitle>
+
+<AnimatedPage>
+    <h2 class="page-title">Visitor stats</h2>
+
+    @if (Auth.State != LoginState.LoggedIn || Auth.IsDemo)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🔒</div>
+            <p>Sign in with Spotify as the site owner to see visitor stats.</p>
+        </div>
+    }
+    else if (_access == null && !_failed)
+    {
+        <p class="page-message">Loading stats…</p>
+    }
+    else if (_failed)
+    {
+        <div class="empty-state">
+            <p>Couldn't load the stats.</p>
+            <button class="pill-btn" @onclick="LoadAsync">Try again</button>
+        </div>
+    }
+    else if (!_access!.IsOwner)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📊</div>
+            <p>Visitor stats are only for the site owner.</p>
+            <p class="small">
+                If that's you, add your Spotify id <code>@_access.SpotifyId</code> to the server setting
+                <code>Stats:OwnerSpotifyIds</code> (in Azure: an app setting named <code>Stats__OwnerSpotifyIds</code>).
+            </p>
+        </div>
+    }
+    else if (_stats != null)
+    {
+        <div class="stats-periods">
+            @RenderPeriod("Today", _stats.Today)
+            @RenderPeriod("Last 7 days", _stats.Last7Days)
+            @RenderPeriod("Last 30 days", _stats.Last30Days)
+        </div>
+
+        <h3 class="stats-heading">Visitors per day</h3>
+        <div class="stats-legend">
+            <span><i class="stats-swatch spotify"></i>Signed in</span>
+            <span><i class="stats-swatch demo"></i>Demo</span>
+            <span><i class="stats-swatch signed-out"></i>Signed out</span>
+        </div>
+        <div class="stats-chart">
+            @{
+                var max = Math.Max(1, _stats.Daily.Max(d => d.Spotify + d.Demo + d.SignedOut));
+            }
+            @foreach (var d in _stats.Daily)
+            {
+                var total = d.Spotify + d.Demo + d.SignedOut;
+                <div class="stats-col"
+                     title="@d.Date: @total visitors (@d.Spotify signed in, @d.Demo demo, @d.SignedOut signed out)">
+                    <div class="stats-stack" style="height:@(total * 100 / max)%">
+                        <div class="seg signed-out" style="flex:@d.SignedOut"></div>
+                        <div class="seg demo" style="flex:@d.Demo"></div>
+                        <div class="seg spotify" style="flex:@d.Spotify"></div>
+                    </div>
+                    <div class="stats-col-label">@DateTime.Parse(d.Date).Day</div>
+                </div>
+            }
+        </div>
+        <p class="stats-note">Days are in UTC. A visitor is one browser, counted once a day.</p>
+
+        <div class="stats-columns">
+            <div>
+                <h3 class="stats-heading">Signed-in users (30 days)</h3>
+                @if (_stats.SignedInUsers.Count == 0)
+                {
+                    <p class="stats-note">Nobody yet.</p>
+                }
+                else
+                {
+                    <table class="stats-table">
+                        <thead><tr><th>User</th><th>Days</th><th>Pages</th><th>Last seen</th></tr></thead>
+                        <tbody>
+                            @foreach (var u in _stats.SignedInUsers)
+                            {
+                                <tr>
+                                    <td title="@u.SpotifyId">@u.Name</td>
+                                    <td>@u.DaysActive</td>
+                                    <td>@u.PageViews</td>
+                                    <td>@Ago(u.LastSeen)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div>
+                <h3 class="stats-heading">Top pages (30 days)</h3>
+                <table class="stats-table">
+                    <thead><tr><th>Page</th><th>Views</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _stats.TopPages)
+                        {
+                            <tr><td><code>@p.Path</code></td><td>@p.Views</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</AnimatedPage>
+
+@code {
+    private StatsAccess? _access;
+    private StatsSummary? _stats;
+    private bool _failed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.LoginStateChanged += OnLoginStateChanged;
+        await LoadAsync();
+    }
+
+    private async void OnLoginStateChanged(LoginState _)
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Auth.State != LoginState.LoggedIn || Auth.IsDemo)
+            return;
+
+        _failed = false;
+
+        try
+        {
+            // Renews the login token first if it has expired
+            await Auth.RefreshIfNeededAsync();
+
+            _access = await Http.GetFromJsonAsync<StatsAccess>("/api/stats/access");
+            if (_access?.IsOwner == true)
+                _stats = await Http.GetFromJsonAsync<StatsSummary>("/api/stats");
+        }
+        catch
+        {
+            _failed = true;
+        }
+    }
+
+    private RenderFragment RenderPeriod(string label, StatsPeriod p) => __builder =>
+    {
+        <div class="stats-card">
+            <div class="stats-card-label">@label</div>
+            <div class="stats-card-value">@p.Visitors</div>
+            <div class="stats-card-sub">visitors · @p.PageViews page views</div>
+            <div class="stats-card-split">
+                <span><i class="stats-swatch spotify"></i>@p.Spotify signed in</span>
+                <span><i class="stats-swatch demo"></i>@p.Demo demo</span>
+                <span><i class="stats-swatch signed-out"></i>@p.SignedOut signed out</span>
+            </div>
+        </div>
+    };
+
+    private static string Ago(DateTime utc)
+    {
+        var span = DateTime.UtcNow - utc;
+        return span.TotalMinutes < 2 ? "just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min ago"
+            : span.TotalDays < 1 ? $"{(int)span.TotalHours} h ago"
+            : $"{(int)span.TotalDays} d ago";
+    }
+
+    public void Dispose() => Auth.LoginStateChanged -= OnLoginStateChanged;
+}

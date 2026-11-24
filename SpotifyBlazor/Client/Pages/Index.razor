@@ -2,8 +2,39 @@
 
 <PageTitle>SpotifyBlazor</PageTitle>
 
+@inject SpotifyAuthService Auth
+@inject NavigationManager Nav
+@inject HttpClient Http
+@using System.Net.Http.Json
+@using SpotifyBlazor.Client.Services
+@using SpotifyBlazor.Shared.Models
+@implements IDisposable
+
 <AnimatedPage>
     <h2 class="page-title">Welcome to SpotifyBlazor</h2>
+
+    @if (Auth.State == LoginState.NotLoggedIn)
+    {
+        <div class="demo-intro">
+            <p>
+                Sign in with Spotify to use your own library, or try the demo first: no account needed.
+                It comes with a few free songs that really play, so the player, lyrics view and
+                🌈 Visualizer all work.
+            </p>
+            <button class="btn btn-outline-light" @onclick="StartDemo">Try the demo</button>
+        </div>
+    }
+    else if (Auth.IsDemo)
+    {
+        <div class="demo-intro">
+            <p>
+                🎧 <b>You're in demo mode.</b> Everything runs on a small built-in library: open
+                <b>Playlists</b>, pick a song, then <b>Now Playing → 🌈 Visualizer</b> to see it react to the
+                music. Likes and queue changes last until you reload.
+            </p>
+            <DemoCredit />
+        </div>
+    }
 
     <div class="card-grid">
         <a href="/liked" class="media-card">
@@ -23,5 +54,56 @@
             <div class="media-card-title">Recently Played</div>
             <div class="media-card-subtitle">Your play history</div>
         </a>
+
+        @if (_isStatsOwner)
+        {
+            <a href="/stats" class="media-card">
+                <div class="media-card-image media-card-placeholder">📊</div>
+                <div class="media-card-title">Visitor stats</div>
+                <div class="media-card-subtitle">Who's visiting (only you see this)</div>
+            </a>
+        }
     </div>
 </AnimatedPage>
+
+@code {
+    private bool _isStatsOwner;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.LoginStateChanged += OnLoginStateChanged;
+        await CheckStatsOwnerAsync();
+    }
+
+    private async void OnLoginStateChanged(LoginState _)
+    {
+        await CheckStatsOwnerAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // The stats card only shows for the site owner; the server decides who that is
+    private async Task CheckStatsOwnerAsync()
+    {
+        _isStatsOwner = false;
+        if (Auth.State != LoginState.LoggedIn || Auth.IsDemo)
+            return;
+
+        try
+        {
+            await Auth.RefreshIfNeededAsync();
+            var access = await Http.GetFromJsonAsync<StatsAccess>("/api/stats/access");
+            _isStatsOwner = access?.IsOwner == true;
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task StartDemo()
+    {
+        await Auth.StartDemoAsync();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose() => Auth.LoginStateChanged -= OnLoginStateChanged;
+}

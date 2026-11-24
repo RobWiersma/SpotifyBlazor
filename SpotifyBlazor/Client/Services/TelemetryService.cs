@@ -104,8 +104,12 @@ public class TelemetryService
         string? component = null,
         string? actionName = null)
     {
+        // The work runs either way; only the timing report needs telemetry (demo mode has none)
         if (!CanSendTelemetry())
+        {
+            await action();
             return;
+        }
 
         var sw = Stopwatch.StartNew();
 

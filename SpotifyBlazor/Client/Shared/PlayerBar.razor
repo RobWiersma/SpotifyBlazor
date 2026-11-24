@@ -22,6 +22,7 @@
             @if (Auth.State != LoginState.LoggingIn)
             {
                 <button class="btn btn-success btn-sm d-md-none" @onclick="Login">Login with Spotify</button>
+                <button class="btn btn-outline-light btn-sm d-md-none" @onclick="StartDemo">Try the demo</button>
             }
         </div>
     }
@@ -149,11 +150,12 @@
 
             @if (Auth.State == LoginState.LoggedIn)
             {
-                <button class="mobile-option mobile-logout" @onclick="Logout">Logout</button>
+                <button class="mobile-option mobile-logout" @onclick="Logout">@(Auth.IsDemo ? "Exit demo" : "Logout")</button>
             }
             else if (Auth.State != LoginState.LoggingIn)
             {
                 <button class="mobile-option" @onclick="Login">Login with Spotify</button>
+                <button class="mobile-option" @onclick="StartDemo">Try the demo</button>
             }
 
         </div>
@@ -288,6 +290,13 @@
         var url = SpotifyLogin.AuthorizeUrl(Config);
         if (url != null)
             Nav.NavigateTo(url, forceLoad: true);
+    }
+
+    private async Task StartDemo()
+    {
+        showMobileTools = false;
+        await Auth.StartDemoAsync();
+        Nav.NavigateTo("/");
     }
 
     private async Task Logout()

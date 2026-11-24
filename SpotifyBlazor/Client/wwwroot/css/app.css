@@ -2002,3 +2002,176 @@ a {
         color: #ff8a8a !important;
     }
 }
+
+/* --- Demo mode --- */
+
+/* Welcome note on the home page: how to try the demo, or what's in it */
+.demo-intro {
+    max-width: 720px;
+    margin: 0 0 24px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+    .demo-intro p {
+        margin-bottom: 12px;
+    }
+
+/* Attribution for the demo songs (CC BY 4.0) */
+.demo-credit {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 8px 0 0;
+}
+
+    .demo-credit a {
+        color: inherit;
+    }
+
+.demo-badge {
+    color: #fff;
+    font-weight: 600;
+}
+
+.header-right .btn + .btn {
+    margin-left: 8px;
+}
+
+/* --- Visitor stats (/stats, owner only) --- */
+
+.stats-periods {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.stats-card {
+    padding: 16px 20px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.stats-card-label {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.stats-card-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stats-card-sub {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.75);
+    margin-bottom: 8px;
+}
+
+.stats-card-split,
+.stats-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 0.85rem;
+}
+
+.stats-legend {
+    margin-bottom: 8px;
+}
+
+.stats-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    margin-right: 6px;
+}
+
+    .stats-swatch.spotify, .seg.spotify { background: #1db954; }
+    .stats-swatch.demo, .seg.demo { background: #a78bfa; }
+    .stats-swatch.signed-out, .seg.signed-out { background: rgba(255, 255, 255, 0.45); }
+
+.stats-heading {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 8px 0 10px;
+}
+
+.stats-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 180px;
+    padding: 8px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.stats-col {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    min-width: 0;
+}
+
+.stats-stack {
+    display: flex;
+    flex-direction: column;
+    border-radius: 3px 3px 0 0;
+    overflow: hidden;
+    min-height: 1px;
+}
+
+.stats-col-label {
+    font-size: 0.65rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+}
+
+.stats-note {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 6px 0 24px;
+}
+
+.stats-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+.stats-table {
+    width: 100%;
+    font-size: 0.9rem;
+    border-collapse: collapse;
+}
+
+    .stats-table th {
+        text-align: left;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.75);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 4px 8px 6px 0;
+    }
+
+    .stats-table td {
+        padding: 6px 8px 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stats-table code,
+    .empty-state code {
+        color: inherit;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 1px 5px;
+        border-radius: 4px;
+    }

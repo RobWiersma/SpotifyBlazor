@@ -12,6 +12,7 @@ public class SpotifyAuthService
     private readonly IJSRuntime _js;
     private readonly ILogger<SpotifyAuthService> _logger;
     private readonly NotificationService _notifications;
+    private readonly DemoLibrary _demo;
 
     public string? AccessToken { get; private set; }
     public string? RefreshToken { get; private set; }
@@ -34,12 +35,17 @@ public class SpotifyAuthService
         LoginStateChanged?.Invoke(newState);
     }
 
-    public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger, NotificationService notifications)
+    public SpotifyAuthService(HttpClient http, IJSRuntime js, ILogger<SpotifyAuthService> logger,
+        NotificationService notifications, DemoLibrary demo)
     {
         _http = http;
         _js = js;
         _logger = logger;
         _notifications = notifications;
+        _demo = demo;
+
+        // A demo song ending moves playback on by itself; refresh the player like any change
+        _demo.Changed += NotifyPlaybackChangedAsync;
 
         _logger.LogWarning("DIAGNOSTIC: AuthService HttpClient hash = {Hash}", _http.GetHashCode());
     }
@@ -141,6 +147,32 @@ public class SpotifyAuthService
         throw new Exception("All API endpoints failed.");
     }
 
+    // ---------------------------------------------------------
+    // Demo mode: the app runs on DemoLibrary's built-in songs, no Spotify account needed.
+    // Remembered in localStorage so a reload stays in the demo.
+    // ---------------------------------------------------------
+    private const string DemoStorageKey = "demo_mode";
+
+    public bool IsDemo => _demo.IsOn;
+
+    public async Task StartDemoAsync()
+    {
+        _logger.LogInformation("Starting demo mode");
+
+        await _js.InvokeVoidAsync("localStorage.setItem", DemoStorageKey, "1");
+        EnterDemo();
+    }
+
+    private void EnterDemo()
+    {
+        _demo.IsOn = true;
+        AccessToken = "demo";
+        RefreshToken = null;
+        ExpiresAt = DateTime.MaxValue;
+        _likedSongsContextUri = null;
+        SetState(LoginState.LoggedIn);
+    }
+
     public async Task InitializeAsync()
     {
         _logger.LogInformation("Loading tokens from localStorage");
@@ -192,7 +224,12 @@ public class SpotifyAuthService
         // ---------------------------------------------------------
         // Set login state after restore
         // ---------------------------------------------------------
-        if (!string.IsNullOrEmpty(AccessToken) &&
+        if (await _js.InvokeAsync<string?>("localStorage.getItem", DemoStorageKey) == "1")
+        {
+            EnterDemo();
+            _logger.LogInformation("LoginState set to LoggedIn (demo mode) in InitializeAsync");
+        }
+        else if (!string.IsNullOrEmpty(AccessToken) &&
             !string.IsNullOrEmpty(ApiJwt))
         {
             SetState(LoginState.LoggedIn);
@@ -463,6 +500,13 @@ public class SpotifyAuthService
         ExpiresAt = DateTime.MinValue;
 
         await _js.InvokeVoidAsync("localStorage.removeItem", StorageKey);
+
+        if (_demo.IsOn)
+        {
+            await _demo.StopAsync();
+            _demo.IsOn = false;
+            await _js.InvokeVoidAsync("localStorage.removeItem", DemoStorageKey);
+        }
 
         _likedSongsContextUri = null;   // belongs to the user who just left
 

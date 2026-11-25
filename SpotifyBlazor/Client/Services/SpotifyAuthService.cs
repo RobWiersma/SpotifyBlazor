@@ -46,8 +46,6 @@ public class SpotifyAuthService
 
         // A demo song ending moves playback on by itself; refresh the player like any change
         _demo.Changed += NotifyPlaybackChangedAsync;
-
-        _logger.LogWarning("DIAGNOSTIC: AuthService HttpClient hash = {Hash}", _http.GetHashCode());
     }
 
     private readonly string[] _apiEndpoints = new[]
@@ -102,12 +100,12 @@ public class SpotifyAuthService
 
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"SeekAsync failed: {response.StatusCode}");
+                _logger.LogWarning("Seek failed: {StatusCode}", response.StatusCode);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SeekAsync exception: {ex.Message}");
+            _logger.LogWarning(ex, "Seek failed");
         }
     }
 
@@ -308,9 +306,6 @@ public class SpotifyAuthService
             SetState(LoginState.LoginFailed);
             return;
         }
-
-        var raw = await resp.Content.ReadAsStringAsync();
-        _logger.LogWarning("RAW JWT RESPONSE: {Raw}", raw);
 
         var jwtResponse = await resp.Content.ReadFromJsonAsync<ApiJwtResponseLocal>();
         ApiJwt = jwtResponse?.jwt;
@@ -1462,8 +1457,8 @@ public class SpotifyAuthService
 
         var res = await _http.SendAsync(req);
 
-        Console.WriteLine($"TransferPlaybackAsync: {res.StatusCode}");
-        Console.WriteLine(await res.Content.ReadAsStringAsync());
+        if (!res.IsSuccessStatusCode)
+            _logger.LogWarning("Transfer playback failed: {StatusCode}", res.StatusCode);
 
         if (res.IsSuccessStatusCode)
             await NotifyPlaybackChangedAsync();
@@ -1479,26 +1474,11 @@ public class SpotifyAuthService
 
         var res = await _http.SendAsync(req);
 
-        Console.WriteLine($"GetVolumeAsync: Status = {res.StatusCode}");
+        // 204 (nothing playing) or an error: fall back to the middle
+        if (res.StatusCode != System.Net.HttpStatusCode.OK)
+            return 50;
 
-        // ⭐ Dump raw JSON from Spotify
-        var raw = await res.Content.ReadAsStringAsync();
-        Console.WriteLine("GetVolumeAsync RAW JSON:");
-        Console.WriteLine(raw);
-
-        if (!res.IsSuccessStatusCode)
-            return 50; // safe fallback
-
-        // ⭐ Try to parse JSON into your model
         var json = await res.Content.ReadFromJsonAsync<SpotifyPlayerState>();
-
-        // ⭐ Dump parsed object for debugging
-        Console.WriteLine("GetVolumeAsync Parsed Device:");
-        Console.WriteLine($"Device ID: {json?.Device?.Id}");
-        Console.WriteLine($"Device Name: {json?.Device?.Name}");
-        Console.WriteLine($"Device Type: {json?.Device?.Type}");
-        Console.WriteLine($"Volume Percent: {json?.Device?.VolumePercent}");
-
         return json?.Device?.VolumePercent ?? 50;
     }
 
@@ -1512,14 +1492,15 @@ public class SpotifyAuthService
         req.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", AccessToken);
 
-        // ❌ DO NOT add Content-Type here — it causes the crash
-        // req.Headers.Add("Content-Type", "application/json");
+        // No body and no Content-Type: Spotify rejects this request with one
 
         var res = await _http.SendAsync(req);
 
-        Console.WriteLine($"SetVolumeAsync: {res.StatusCode}");
-        Console.WriteLine(await res.Content.ReadAsStringAsync());
+        if (!res.IsSuccessStatusCode)
+            _logger.LogWarning("Set volume failed: {StatusCode}", res.StatusCode);
     }
+
+
     public async Task<bool> TrySetVolumeAsync(int volume)
     {
         var req = new HttpRequestMessage(
@@ -1531,10 +1512,6 @@ public class SpotifyAuthService
 
         var res = await _http.SendAsync(req);
 
-        Console.WriteLine($"TrySetVolumeAsync: {res.StatusCode}");
-        Console.WriteLine(await res.Content.ReadAsStringAsync());
-
-        // ⭐ Correct logic:
         // 204 = success
         // 202 = ignored (unsupported device)
         // 403 = restricted device
@@ -1547,39 +1524,29 @@ public class SpotifyAuthService
 
     public async Task<SpotifyPlayerState?> GetPlayerStateAsync()
     {
-        // Never log the access token: anyone who sees it (a screenshot, a shared log) can
-        // act as this Spotify account until it expires
-        Console.WriteLine("GetPlayerStateAsync: Sending GET /v1/me/player");
-
+        // Polled often, so it only logs failures; never the token or the response itself
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.spotify.com/v1/me/player");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AccessToken);
 
         var res = await _http.SendAsync(req);
 
-        // Debug: status code
-        Console.WriteLine($"GetPlayerStateAsync: Status = {res.StatusCode}");
-
         if (!res.IsSuccessStatusCode)
         {
-            // Debug: error body
-            var errorBody = await res.Content.ReadAsStringAsync();
-            Console.WriteLine($"GetPlayerStateAsync: Error Body = {errorBody}");
+            _logger.LogWarning("Getting the player state failed: {StatusCode}", res.StatusCode);
             return null;
         }
 
-        // Debug: raw JSON
         var rawJson = await res.Content.ReadAsStringAsync();
-        Console.WriteLine($"GetPlayerStateAsync: Raw JSON = {rawJson}");
+        if (string.IsNullOrWhiteSpace(rawJson))
+            return null;   // 204: nothing is playing on any device
 
         try
         {
-            var parsed = JsonSerializer.Deserialize<SpotifyPlayerState>(rawJson);
-            Console.WriteLine("GetPlayerStateAsync: Deserialization OK");
-            return parsed;
+            return JsonSerializer.Deserialize<SpotifyPlayerState>(rawJson);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"GetPlayerStateAsync: JSON parse error: {ex.Message}");
+            _logger.LogWarning(ex, "Couldn't read the player state");
             return null;
         }
     }

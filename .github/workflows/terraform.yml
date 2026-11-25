@@ -44,7 +44,7 @@ jobs:
       # syntax, types and references without touching state or Azure.
       - name: terraform validate
         run: |
-          for dir in bootstrap envs/prod; do
+          for dir in bootstrap envs/prod github; do
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate

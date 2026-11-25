@@ -7,6 +7,7 @@
 @inject SpotifyAuthService Auth
 @inject TelemetryService Telemetry
 @inject IJSRuntime JS
+@inject ILogger<SpotifyCallback> Logger
 
 <h3>Logging in to Spotify…</h3>
 
@@ -23,7 +24,7 @@
 
         if (string.IsNullOrEmpty(Code))
         {
-            Console.WriteLine("No code found in callback URL.");
+            Logger.LogWarning("Sign-in callback had no code");
 
             if (Auth.State == LoginState.LoggedIn)
             {
@@ -36,7 +37,7 @@
         // ---------------------------------------------------------
         // 1. Exchange authorization code for Spotify tokens
         // ---------------------------------------------------------
-        Console.WriteLine("Exchanging code for Spotify tokens...");
+        Logger.LogInformation("Exchanging the sign-in code for Spotify tokens");
 
         if (Auth.State == LoginState.LoggedIn)
         {
@@ -47,7 +48,7 @@
 
         if (!tokenResponse.IsSuccessStatusCode)
         {
-            Console.WriteLine("Spotify token exchange failed.");
+            Logger.LogWarning("Spotify token exchange failed: {StatusCode}", tokenResponse.StatusCode);
 
             if (Auth.State == LoginState.LoggedIn)
             {
@@ -62,7 +63,7 @@
 
         if (token is null)
         {
-            Console.WriteLine("Spotify token exchange returned no token.");
+            Logger.LogWarning("Spotify token exchange returned no token");
             return;
         }
 
@@ -81,7 +82,7 @@
         // If login failed, stop here
         if (Auth.State == LoginState.LoginFailed)
         {
-            Console.WriteLine("Login failed inside SetInitialTokens.");
+            Logger.LogWarning("Sign-in failed after the token exchange");
 
             await Telemetry.TrackAsync("crit", "LoginFailed in SetInitialTokens", page: "spotcallback");
 
@@ -91,7 +92,7 @@
         // If still not logged in, do not continue
         if (Auth.State != LoginState.LoggedIn)
         {
-            Console.WriteLine("User not logged in after SetInitialTokens.");
+            Logger.LogWarning("Not signed in after the token exchange");
             return;
         }
 

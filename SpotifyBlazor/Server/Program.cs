@@ -161,8 +161,9 @@ var app = builder.Build();
 var startupLogger = app.Services
     .GetRequiredService<ILogger<Program>>();
 
-startupLogger.LogWarning(
-    "ENV CHECK → Issuer={Issuer}, Audience={Audience}, KeyLength={KeyLength}, ASPNETCORE_ENVIRONMENT={Env}",
+// Normal startup info (never the key itself, only its length to spot a missing one)
+startupLogger.LogInformation(
+    "Startup config: Issuer={Issuer}, Audience={Audience}, KeyLength={KeyLength}, ASPNETCORE_ENVIRONMENT={Env}",
     jwtIssuer,
     jwtAudience,
     jwtKey?.Length,
@@ -230,7 +231,7 @@ app.MapPost("/api/spotify/exchange", async (
     ExchangeRequest req,
     ILogger<Program> logger) =>
 {
-    logger.LogWarning("EXCHANGE → Starting Spotify code exchange");
+    logger.LogInformation("Exchanging a Spotify sign-in code");
 
     var http = httpFactory.CreateClient();
 
@@ -249,7 +250,7 @@ app.MapPost("/api/spotify/exchange", async (
 
     var raw = await response.Content.ReadAsStringAsync();
     // Don't log the body: it contains the access and refresh tokens
-    logger.LogWarning("EXCHANGE RESPONSE → {StatusCode}", (int)response.StatusCode);
+    logger.LogInformation("Spotify code exchange returned {StatusCode}", (int)response.StatusCode);
 
     // On failure the body is just Spotify's error (no tokens), so it's safe to pass along
     if (!response.IsSuccessStatusCode)
@@ -301,8 +302,7 @@ app.MapPost("/api/auth/spotify-login", async (
     SpotifyLoginRequest req,
     ILogger<Program> logger) =>
 {
-    logger.LogWarning("JWT MINT → Starting mint with access token length {Len}",
-        req.SpotifyAccessToken?.Length);
+    logger.LogInformation("Signing in a Spotify user");
 
     var http = httpFactory.CreateClient();
     http.DefaultRequestHeaders.Authorization =
@@ -325,7 +325,6 @@ app.MapPost("/api/auth/spotify-login", async (
         }
 
         me = await meResp.Content.ReadFromJsonAsync<SpotifyMe>();
-        logger.LogWarning("JWT MINT → Spotify /me result: {Me}", me);
     }
     catch (Exception ex)
     {
@@ -360,7 +359,7 @@ app.MapPost("/api/auth/spotify-login", async (
 
     var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-    logger.LogWarning("JWT MINT → Successfully minted JWT length {Len}", jwt.Length);
+    logger.LogInformation("Signed in Spotify user {SpotifyId}", me.Id);
 
     return Results.Ok(new { jwt });
 })

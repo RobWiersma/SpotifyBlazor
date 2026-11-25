@@ -63,7 +63,7 @@ data "azurerm_storage_account" "tfstate" {
 locals {
   issuer   = "https://token.actions.githubusercontent.com"
   audience = "api://AzureADTokenExchange"
-  repo     = "repo:${var.github_repository}"
+  repo     = var.github_subject_prefix
 }
 
 # -----------------------------------------------------------------------------

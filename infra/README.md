@@ -28,6 +28,7 @@ flowchart LR
 ```
 infra/
 ├── bootstrap/            # Run once: storage account for remote state (local state)
+├── github/               # Run once: GitHub Actions' OIDC identities (deploy + plan)
 ├── modules/spotify-app/  # Reusable module: everything one environment needs
 │   └── tests/            # `terraform test` with mocked providers
 └── envs/
@@ -134,32 +135,31 @@ terraform test        # plans against mocked providers: no Azure login, no cost
 
 [`.github/workflows/terraform.yml`](../.github/workflows/terraform.yml) runs on every PR and push to `main` that touches `infra/`:
 
-1. **fmt + validate + test**: `terraform fmt -check`, `validate` for bootstrap and prod, and the mocked `terraform test`. It needs no Azure access, so it always runs.
+1. **fmt + validate + test**: `terraform fmt -check`, `validate` for bootstrap, prod and github, and the mocked `terraform test`. It needs no Azure access, so it always runs.
 2. **plan (prod)**: a read-only `terraform plan` against real Azure, with the result in the job summary. It is skipped until the repository variables below exist. CI never runs `apply`.
 
-To turn on the plan job, create an identity for GitHub and trust this repo through OIDC:
+### GitHub's Azure access (`infra/github`)
+
+The plan job here and the app's deploy workflow ([`deploy.yml`](../.github/workflows/deploy.yml)) log in to Azure with OIDC. `infra/github` creates their identities, each with the least it needs:
+
+| Identity | Trusted for | Can do |
+| --- | --- | --- |
+| `github-spotifyblazor-deploy` | jobs in the GitHub **production** environment only, so a pull request can't deploy | Website Contributor on the live `SpotifyBlazor` web app, nothing else |
+| `github-spotifyblazor-terraform` | pull requests and pushes to `main` | Reader and Website Contributor on the subscription (plan reads web app settings), Storage Blob Data Reader on the state account |
+
+Apply it once from your machine; CI never applies it:
 
 ```powershell
-$app = az ad app create --display-name "github-spotifyblazor-terraform" | ConvertFrom-Json
-az ad sp create --id $app.appId
-$sub = az account show --query id -o tsv
-
-# Plan reads everything; Website Contributor is needed to read web app settings.
-az role assignment create --assignee $app.appId --role Reader --scope /subscriptions/$sub
-az role assignment create --assignee $app.appId --role "Website Contributor" --scope /subscriptions/$sub
-az role assignment create --assignee $app.appId --role "Storage Blob Data Reader" `
-  --scope (az storage account show -n <state account> --query id -o tsv)
-
-foreach ($c in @(@{n="pull-requests"; s="pull_request"}, @{n="main"; s="ref:refs/heads/main"})) {
-  @{ name = $c.n; issuer = "https://token.actions.githubusercontent.com"
-     subject = "repo:RobWiersma/SpotifyBlazor:$($c.s)"; audiences = @("api://AzureADTokenExchange") } |
-    ConvertTo-Json | Set-Content fic.json
-  az ad app federated-credential create --id $app.appId --parameters fic.json
-}
-Remove-Item fic.json
+cd infra/github
+terraform init -backend-config="storage_account_name=<state account>"
+terraform plan -var="tfstate_storage_account=<state account>" -out tfplan   # 11 to add
+terraform apply tfplan
+terraform output
 ```
 
-Then, under GitHub → Settings → Secrets and variables → Actions → **Variables**, add `AZURE_CLIENT_ID` (`$app.appId`), `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `TFSTATE_STORAGE_ACCOUNT` and `SPOTIFY_CLIENT_ID`. These are identifiers, not secrets: the trust is the federated credential, so knowing the IDs doesn't let anyone log in.
+Then, under GitHub → Settings → Secrets and variables → Actions → **Variables**, add the outputs (`AZURE_DEPLOY_CLIENT_ID`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME`) plus `TFSTATE_STORAGE_ACCOUNT` and `SPOTIFY_CLIENT_ID`. These are identifiers, not secrets: the trust is the federated credential, so knowing the IDs doesn't let anyone log in. Until they exist, both workflows skip their Azure jobs.
+
+To require your approval before each deploy, add yourself as a required reviewer on the **production** environment (Settings → Environments).
 
 To let CI apply later, give a separate identity Contributor plus Role Based Access Control Administrator, and run it only from `main` behind a GitHub Environment with required reviewers.
 

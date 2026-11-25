@@ -1,4 +1,10 @@
 <Solution>
+  <Folder Name="/SpotifyBlazor/" />
+  <Folder Name="/SpotifyBlazor/Client/" />
+  <Folder Name="/SpotifyBlazor/Server/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/SpotifyBlazor.Tests/SpotifyBlazor.Tests.csproj" />
+  </Folder>
   <Project Path="SpotifyBlazor/Client/SpotifyBlazor.Client.csproj" />
   <Project Path="SpotifyBlazor/Server/SpotifyBlazor.Server.csproj" />
   <Project Path="SpotifyBlazor/Shared/SpotifyBlazor.Shared.csproj" />

@@ -8,10 +8,12 @@ on:
     branches: [main]
     paths:
       - "SpotifyBlazor/**"
+      - "tests/**"
       - ".github/workflows/deploy.yml"
   pull_request:
     paths:
       - "SpotifyBlazor/**"
+      - "tests/**"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -26,7 +28,7 @@ concurrency:
 jobs:
   # Runs on pull requests too, so a change that doesn't build shows up before merging
   build:
-    name: build + publish
+    name: build + test + publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,6 +36,20 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
+
+      # A failing test stops the run here, before anything is published or deployed
+      - name: dotnet test
+        run: dotnet test tests/SpotifyBlazor.Tests --logger "trx" --results-directory test-results
+
+      - name: Test report
+        if: always()
+        run: |
+          {
+            echo "### Tests"
+            echo '```'
+            grep -ho 'total="[0-9]*" executed="[0-9]*" passed="[0-9]*" failed="[0-9]*"' test-results/*.trx || echo "no results"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: dotnet publish
         run: dotnet publish SpotifyBlazor/Server/SpotifyBlazor.Server.csproj -c Release -o publish

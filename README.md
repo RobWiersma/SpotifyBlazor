@@ -10,6 +10,8 @@
 
 No Spotify account? Click **Try the demo** on the site: a built-in library of free songs that really play, with the visualizer drawing the actual audio.
 
+[![Build, test and deploy](https://github.com/RobWiersma/SpotifyBlazor/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/RobWiersma/SpotifyBlazor/actions/workflows/deploy.yml)
+[![Terraform](https://github.com/RobWiersma/SpotifyBlazor/actions/workflows/terraform.yml/badge.svg?branch=main)](https://github.com/RobWiersma/SpotifyBlazor/actions/workflows/terraform.yml)
 ![.NET 8](https://img.shields.io/badge/.NET-8.0_LTS-512BD4?logo=dotnet&logoColor=white)
 ![Blazor WebAssembly](https://img.shields.io/badge/Blazor-WebAssembly-512BD4?logo=blazor&logoColor=white)
 ![Spotify Web API](https://img.shields.io/badge/Spotify-Web_API_%2B_Playback_SDK-1DB954?logo=spotify&logoColor=white)
@@ -233,6 +235,14 @@ dotnet run --project SpotifyBlazor/Server
 ```
 
 Then open **https://127.0.0.1:7151** and log in with Spotify.
+
+### 🧪 Tests
+
+```bash
+dotnet test tests/SpotifyBlazor.Tests
+```
+
+xUnit tests for the visitor stats (who counts as signed in, page grouping, limits), the "Longer than" filter, and demo mode's stand-in for the Spotify API. They need no Spotify account or Azure access, and every pull request runs them before anything deploys.
 
 ### ☁️ Deploying
 

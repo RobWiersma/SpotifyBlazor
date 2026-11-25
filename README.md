@@ -242,7 +242,7 @@ Then open **https://127.0.0.1:7151** and log in with Spotify.
 dotnet test tests/SpotifyBlazor.Tests
 ```
 
-xUnit tests for the visitor stats (who counts as signed in, page grouping, limits), the "Longer than" filter, and demo mode's stand-in for the Spotify API. They need no Spotify account or Azure access, and every pull request runs them before anything deploys.
+xUnit tests for the visitor stats (who counts as signed in, page grouping, limits), the "Longer than" filter, and demo mode's stand-in for the Spotify API, plus [bUnit](https://bunit.dev) tests that render pages and components the way a visitor sees them: the home page signed out and in demo mode, the About page, the header and the length picker. They need no Spotify account or Azure access, and every pull request runs them before anything deploys.
 
 ### ☁️ Deploying
 

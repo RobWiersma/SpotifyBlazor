@@ -162,17 +162,11 @@
     // ---------------------------------------------------------
     // DISPOSAL
     // ---------------------------------------------------------
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         debounceCts?.Cancel();
         debounceCts?.Dispose();
         Auth.LoginStateChanged -= OnLoginStateChanged;
-    }
-
-    public void Dispose()
-    {
-        debounceCts?.Cancel();
-        debounceCts?.Dispose();
-        Auth.LoginStateChanged -= OnLoginStateChanged;
+        return ValueTask.CompletedTask;
     }
 }

@@ -16,28 +16,19 @@ public class TelemetryService
         _http = http;
         _auth = auth;
         _logger = logger;
-
-        _logger.LogWarning("DIAGNOSTIC: TelemetryService HttpClient hash = {Hash}", _http.GetHashCode());
     }
 
     // ---------------------------------------------------------
-    // Guard: Prevent telemetry before login + before JWT exists
+    // Guard: telemetry needs our API's login token, so it's skipped when signed out or in
+    // demo mode. That's normal, so it's only a debug message.
     // ---------------------------------------------------------
     private bool CanSendTelemetry()
     {
-        if (_auth.State != LoginState.LoggedIn)
-        {
-            _logger.LogWarning("Telemetry blocked: user not logged in (State={State})", _auth.State);
-            return false;
-        }
+        if (_auth.State == LoginState.LoggedIn && !string.IsNullOrEmpty(_auth.ApiJwt))
+            return true;
 
-        if (string.IsNullOrEmpty(_auth.ApiJwt))
-        {
-            _logger.LogWarning("Telemetry blocked: API JWT missing");
-            return false;
-        }
-
-        return true;
+        _logger.LogDebug("Telemetry skipped: not signed in (State={State})", _auth.State);
+        return false;
     }
 
     // ---------------------------------------------------------
@@ -55,8 +46,6 @@ public class TelemetryService
         if (!CanSendTelemetry())
             return;
 
-        var authHeader = _http.DefaultRequestHeaders.Authorization?.ToString();
-
         var evt = new TelemetryEvent(
             level,
             message,
@@ -73,22 +62,13 @@ public class TelemetryService
         {
             var resp = await _http.PostAsJsonAsync("/api/telemetry", evt);
 
+            // Never log the Authorization header: it's the visitor's login token
             if (!resp.IsSuccessStatusCode)
-            {
-                _logger.LogError(
-                    "Telemetry FAILED StatusCode={StatusCode} AuthHeader={Auth}",
-                    resp.StatusCode,
-                    authHeader ?? "<null>"
-                );
-            }
-            else
-            {
-                _logger.LogInformation("Telemetry SUCCESS");
-            }
+                _logger.LogWarning("Telemetry failed: {StatusCode}", resp.StatusCode);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending telemetry");
+            _logger.LogWarning(ex, "Couldn't send telemetry");
         }
     }
 

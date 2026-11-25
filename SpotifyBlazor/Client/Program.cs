@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.Logging;
 using SpotifyBlazor.Client;
 using SpotifyBlazor.Client.Services;
 using SpotifyBlazor.Shared.Models;
@@ -8,6 +9,10 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
+
+// The browser console shows everything from Information up while developing, and only
+// warnings and errors on the live site
+builder.Logging.SetMinimumLevel(builder.HostEnvironment.IsDevelopment() ? LogLevel.Information : LogLevel.Warning);
 
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<DemoLibrary>();

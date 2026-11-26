@@ -73,7 +73,7 @@
                 </div>
             }
         </div>
-        <p class="stats-note">Days are in UTC. A visitor is one browser, counted once a day.</p>
+        <p class="stats-note">Days are in UTC. A visitor is one browser, counted once a day. Your own visits are counted apart.</p>
 
         <div class="stats-columns">
             <div>
@@ -166,6 +166,9 @@
                 <span><i class="stats-swatch spotify"></i>@p.Spotify signed in</span>
                 <span><i class="stats-swatch demo"></i>@p.Demo demo</span>
                 <span><i class="stats-swatch signed-out"></i>@p.SignedOut signed out</span>
+            </div>
+            <div class="stats-card-yours" title="Your own visits, from any browser you've signed in on. Not in the numbers above.">
+                + @p.YourPageViews of your own page views
             </div>
         </div>
     };

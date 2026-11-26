@@ -39,6 +39,7 @@ public class StatsPeriod
     public int Demo { get; set; }
     public int SignedOut { get; set; }
     public int PageViews { get; set; }
+    public int YourPageViews { get; set; }        // the owner's own, not in the numbers above
 }
 
 public class StatsDay

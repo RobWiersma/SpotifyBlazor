@@ -2072,6 +2072,14 @@ a {
     margin-bottom: 8px;
 }
 
+.stats-card-yours {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
 .stats-card-split,
 .stats-legend {
     display: flex;

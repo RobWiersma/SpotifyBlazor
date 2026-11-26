@@ -130,29 +130,35 @@ public class VisitStatsTests
     }
 
     [Fact]
-    public void The_owners_signed_in_visits_dont_count()
+    public void The_owners_signed_in_visits_count_apart()
     {
         Visit("a", spotifyId: "owner", spotifyName: "Me");
         Visit("b", spotifyId: "owner2");
+        Visit("c", mode: VisitModes.Demo);
 
         var summary = _stats.Summarize();
-        Assert.Equal(0, summary.Today.Visitors);
+        Assert.Equal(1, summary.Today.Visitors);
+        Assert.Equal(1, summary.Today.PageViews);
+        Assert.Equal(2, summary.Today.YourPageViews);
+        Assert.Equal(0, summary.Daily[^1].Spotify);
         Assert.Empty(summary.SignedInUsers);
-        Assert.Empty(summary.TopPages);
+        Assert.Equal(1, Assert.Single(summary.TopPages).Views);
     }
 
     [Fact]
-    public void A_browser_the_owner_signed_in_on_stays_left_out_when_signed_out()
+    public void A_browser_the_owner_signed_in_on_stays_theirs_when_signed_out()
     {
-        Visit("a", mode: VisitModes.SignedOut);              // before signing in: counted at first...
-        Visit("a", spotifyId: "owner");                      // ...then taken back out
-        Visit("a", mode: VisitModes.Demo);                   // and not counted afterwards
+        Visit("a", mode: VisitModes.SignedOut);              // before signing in: a visitor at first...
+        Visit("a", spotifyId: "owner");                      // ...then moved to your own views
+        Visit("a", mode: VisitModes.Demo);                   // and so are later visits
         Visit("b", mode: VisitModes.SignedOut);              // someone else still counts
 
         var today = _stats.Summarize().Today;
         Assert.Equal(1, today.Visitors);
         Assert.Equal(1, today.SignedOut);
         Assert.Equal(0, today.Demo);
+        Assert.Equal(1, today.PageViews);
+        Assert.Equal(3, today.YourPageViews);
     }
 
     private class TestEnvironment : IWebHostEnvironment

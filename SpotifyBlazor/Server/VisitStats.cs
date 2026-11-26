@@ -10,8 +10,9 @@ using SpotifyBlazor.Shared.Models;
 // page views, first and last seen, and for signed-in users the Spotify id and display name
 // taken from our own login token (so they can't be faked).
 //
-// The owner's own visits aren't counted: signed in as an account in Stats:OwnerSpotifyIds, or
-// from a browser the owner has signed in on (remembered in a second small file), even signed out.
+// The owner's own visits are counted apart from everyone else's ("your page views"): signed in as
+// an account in Stats:OwnerSpotifyIds, or from a browser the owner has signed in on (remembered in
+// a second small file), even when it's signed out or in demo mode.
 public class VisitStats : IHostedService, IDisposable
 {
     private const int KeepDays = 90;
@@ -70,20 +71,13 @@ public class VisitStats : IHostedService, IDisposable
 
         lock (_lock)
         {
-            // The owner's visits don't count. A browser they sign in on stays left out when
-            // signed out or in demo mode too, and what it counted earlier is taken back out.
-            if (spotifyId != null && _owners.Contains(spotifyId))
-            {
-                if (_ownerBrowsers.Count < MaxOwnerBrowsers && _ownerBrowsers.Add(visit.VisitorId))
-                {
-                    ForgetOwnerVisits();
-                    _dirty = true;
-                }
-                return;
-            }
+            // The owner's visits are kept apart. A browser they sign in on stays theirs when
+            // signed out or in demo mode too, including what it already counted.
+            if (spotifyId != null && _owners.Contains(spotifyId)
+                && _ownerBrowsers.Count < MaxOwnerBrowsers && _ownerBrowsers.Add(visit.VisitorId))
+                MarkOwnerVisits();
 
-            if (_ownerBrowsers.Contains(visit.VisitorId))
-                return;
+            var owner = _ownerBrowsers.Contains(visit.VisitorId) || (spotifyId != null && _owners.Contains(spotifyId));
 
             if (!_days.TryGetValue(key, out var day))
                 _days[key] = day = new DayStats();
@@ -100,6 +94,7 @@ public class VisitStats : IHostedService, IDisposable
             v.Last = now;
             v.PageViews++;
             v.Mode = mode;
+            v.Owner |= owner;
 
             if (spotifyId != null)
             {
@@ -107,21 +102,24 @@ public class VisitStats : IHostedService, IDisposable
                 v.SpotifyName = string.IsNullOrWhiteSpace(spotifyName) ? null : spotifyName;
             }
 
-            if (page != null && (day.Pages.ContainsKey(page) || day.Pages.Count < 200))
+            if (!owner && page != null && (day.Pages.ContainsKey(page) || day.Pages.Count < 200))
                 day.Pages[page] = day.Pages.GetValueOrDefault(page) + 1;
 
             _dirty = true;
         }
     }
 
-    // Removes visitors that were the owner from every day kept (call inside the lock). Their
-    // page counts can't be told apart from everyone else's, so those stay.
-    private void ForgetOwnerVisits()
+    // Marks visitors that were the owner on every day kept (call inside the lock). Their earlier
+    // top-page counts can't be told apart from everyone else's, so those stay.
+    private void MarkOwnerVisits()
     {
         foreach (var day in _days.Values)
-            foreach (var (id, v) in day.Visitors.ToList())
-                if (_ownerBrowsers.Contains(id) || (v.SpotifyId != null && _owners.Contains(v.SpotifyId)))
-                    day.Visitors.Remove(id);
+            foreach (var (id, v) in day.Visitors)
+                if (!v.Owner && (_ownerBrowsers.Contains(id) || (v.SpotifyId != null && _owners.Contains(v.SpotifyId))))
+                {
+                    v.Owner = true;
+                    _dirty = true;
+                }
     }
 
     // "/album/4aawyAB9vmqN3uQ7FjRGTy?x=1" → "/album/{id}", so pages group and ids aren't kept
@@ -154,7 +152,7 @@ public class VisitStats : IHostedService, IDisposable
             StatsPeriod Period(int n)
             {
                 var visitors = days.TakeLast(n).Where(d => d.Stats != null)
-                    .SelectMany(d => d.Stats!.Visitors)
+                    .SelectMany(d => d.Stats!.Visitors.Where(v => !v.Value.Owner))
                     .GroupBy(v => v.Key)
                     .Select(g => g.OrderBy(x => x.Value.Last).Last().Value)  // latest mode wins
                     .ToList();
@@ -166,12 +164,14 @@ public class VisitStats : IHostedService, IDisposable
                     Demo = visitors.Count(v => v.Mode == VisitModes.Demo),
                     SignedOut = visitors.Count(v => v.Mode == VisitModes.SignedOut),
                     PageViews = days.TakeLast(n).Where(d => d.Stats != null)
-                        .Sum(d => d.Stats!.Visitors.Values.Sum(v => v.PageViews)),
+                        .Sum(d => d.Stats!.Visitors.Values.Where(v => !v.Owner).Sum(v => v.PageViews)),
+                    YourPageViews = days.TakeLast(n).Where(d => d.Stats != null)
+                        .Sum(d => d.Stats!.Visitors.Values.Where(v => v.Owner).Sum(v => v.PageViews)),
                 };
             }
 
             var users = days.Where(d => d.Stats != null)
-                .SelectMany(d => d.Stats!.Visitors.Values.Where(v => v.SpotifyId != null).Select(v => (d.Date, v)))
+                .SelectMany(d => d.Stats!.Visitors.Values.Where(v => v.SpotifyId != null && !v.Owner).Select(v => (d.Date, v)))
                 .GroupBy(x => x.v.SpotifyId!)
                 .Select(g => new StatsUser
                 {
@@ -200,9 +200,9 @@ public class VisitStats : IHostedService, IDisposable
                 Daily = days.Select(d => new StatsDay
                 {
                     Date = d.Date.ToString("yyyy-MM-dd"),
-                    Spotify = d.Stats?.Visitors.Values.Count(v => v.Mode == VisitModes.Spotify) ?? 0,
-                    Demo = d.Stats?.Visitors.Values.Count(v => v.Mode == VisitModes.Demo) ?? 0,
-                    SignedOut = d.Stats?.Visitors.Values.Count(v => v.Mode == VisitModes.SignedOut) ?? 0,
+                    Spotify = d.Stats?.Visitors.Values.Count(v => v.Mode == VisitModes.Spotify && !v.Owner) ?? 0,
+                    Demo = d.Stats?.Visitors.Values.Count(v => v.Mode == VisitModes.Demo && !v.Owner) ?? 0,
+                    SignedOut = d.Stats?.Visitors.Values.Count(v => v.Mode == VisitModes.SignedOut && !v.Owner) ?? 0,
                 }).ToList(),
                 SignedInUsers = users,
                 TopPages = pages,
@@ -234,9 +234,7 @@ public class VisitStats : IHostedService, IDisposable
                     if (v.SpotifyId != null && _owners.Contains(v.SpotifyId) && _ownerBrowsers.Count < MaxOwnerBrowsers)
                         _ownerBrowsers.Add(id);
 
-            var before = _days.Values.Sum(d => d.Visitors.Count);
-            ForgetOwnerVisits();
-            _dirty = _days.Values.Sum(d => d.Visitors.Count) != before;
+            MarkOwnerVisits();
         }
         catch (Exception ex)
         {
@@ -302,6 +300,7 @@ public class VisitStats : IHostedService, IDisposable
         public string? SpotifyId { get; set; }
         public string? SpotifyName { get; set; }
         public int PageViews { get; set; }
+        public bool Owner { get; set; }                 // the site owner, counted apart
         public DateTime First { get; set; }
         public DateTime Last { get; set; }
     }

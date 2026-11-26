@@ -422,7 +422,12 @@
         _showVisualizer = !_showVisualizer;
 
         if (_visualizerModule != null)
+        {
+            // iPhones only allow tilt sensing when asked during a tap, so ask now
+            if (_showVisualizer)
+                await _visualizerModule.InvokeVoidAsync("enableMotion");
             await _visualizerModule.InvokeVoidAsync("setEnabled", _showVisualizer);
+        }
 
         await EnsureLyricsAsync();
     }
@@ -442,6 +447,10 @@
         }
 
         await _visualizerModule!.InvokeVoidAsync("setStyles", _visualizerStyles);
+
+        // Particles follow the phone's tilt; asking during this tap is what iPhones need
+        if (name == "particles" && _visualizerStyles.Contains(name))
+            await _visualizerModule.InvokeVoidAsync("enableMotion");
     }
 
     private async Task ToggleMic()

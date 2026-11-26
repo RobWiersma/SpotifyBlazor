@@ -84,6 +84,54 @@ export function start(el, options) {
 
     update(options);
     frame = requestAnimationFrame(draw);
+
+    // Tilt readings only arrive where the browser allows them (iPhones: after enableMotion),
+    // so listening is harmless everywhere else
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("deviceorientation", onOrientation);
+}
+
+// ---------------------------------------------------------
+// Tilt (phones) and mouse (desktop), for the particles
+// ---------------------------------------------------------
+
+let tilt = null;                           // { x, y }: which way is down on screen, from the phone's tilt
+let pointer = { x: 0, y: 0, at: -1e9 };    // last mouse position (CSS pixels) and when it moved
+let motionAsked = false;                   // asked for tilt permission this visit
+
+// Android and others send tilt freely. iPhones send it only after the visitor allows it,
+// which can only be asked during a tap: turning the visualizer or Particles on calls this.
+export async function enableMotion() {
+    if (motionAsked || typeof DeviceOrientationEvent?.requestPermission !== "function")
+        return;
+
+    motionAsked = true;
+    try {
+        await DeviceOrientationEvent.requestPermission();
+    } catch {
+        motionAsked = false;   // not during a tap after all; ask again on the next one
+    }
+}
+
+// beta tilts front-to-back, gamma side-to-side. Upright gives "down" = (0, 1); lying flat
+// gives almost nothing, so the sparks float. Turned sideways, the screen's axes rotate too.
+function onOrientation(e) {
+    if (e.beta == null || e.gamma == null) return;   // desktops without a sensor
+
+    const rad = Math.PI / 180;
+    const x = Math.sin(e.gamma * rad);
+    const y = Math.sin(Math.max(-90, Math.min(90, e.beta)) * rad);
+    const angle = (screen.orientation?.angle ?? window.orientation ?? 0) * rad;
+
+    tilt = {
+        x: x * Math.cos(angle) + y * Math.sin(angle),
+        y: -x * Math.sin(angle) + y * Math.cos(angle)
+    };
+}
+
+function onPointerMove(e) {
+    if (e.pointerType !== "mouse") return;   // a finger dragging on a phone isn't hovering
+    pointer = { x: e.clientX, y: e.clientY, at: performance.now() };
 }
 
 // options: { imageUrl, playing, trackId, positionMs, syncedAtMs }
@@ -109,6 +157,8 @@ export function update(options) {
 }
 
 export function stop() {
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("deviceorientation", onOrientation);
     cancelAnimationFrame(frame);
     resizeObserver?.disconnect();
     canvas = ctx = resizeObserver = undefined;
@@ -708,6 +758,9 @@ function drawWarp(fs) {
 // faster; 0 lets them drift straight out.
 const PARTICLE_GRAVITY = 0.14;
 
+// How hard the mouse pushes sparks near it (same units). Higher scatters them faster.
+const MOUSE_PUSH = 0.9;
+
 // Sparks thrown out from the cover's edge: a burst on each beat, a big one as a chorus
 // starts, and a trickle in between that follows the bass
 function drawParticles(fs) {
@@ -743,9 +796,31 @@ function drawParticles(fs) {
     ctx.shadowBlur = 0;
     const drag = Math.pow(0.985, frames);
     const gravity = PARTICLE_GRAVITY * dpr * frames;
+    const down = tilt ?? { x: 0, y: 1 };   // on a phone, whichever way it's tilted
+
+    // The mouse pushes sparks out of its way with a little swirl, for a second and a half
+    // after it last moved
+    const box = canvas.getBoundingClientRect();
+    const mouseOn = performance.now() - pointer.at < 1500;
+    const mx = (pointer.x - box.left) * dpr, my = (pointer.y - box.top) * dpr;
+    const reach = 140 * dpr;
+    const push = MOUSE_PUSH * dpr * frames * (calm ? 0.4 : 1);
 
     particles = particles.filter(p => {
-        p.vy += gravity;   // sparks thrown upwards arc over and fall like real ones
+        // Sparks thrown upwards arc over and fall like real ones
+        p.vx += gravity * down.x;
+        p.vy += gravity * down.y;
+
+        if (mouseOn) {
+            const dx = p.x - mx, dy = p.y - my;
+            const d = Math.hypot(dx, dy);
+            if (d < reach && d > 0.5) {
+                const f = push * (1 - d / reach);
+                p.vx += (dx - 0.6 * dy) / d * f;
+                p.vy += (dy + 0.6 * dx) / d * f;
+            }
+        }
+
         p.x += p.vx * frames;
         p.y += p.vy * frames;
         p.vx *= drag;

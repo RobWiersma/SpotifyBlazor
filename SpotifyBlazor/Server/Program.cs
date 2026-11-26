@@ -423,9 +423,7 @@ app.MapPost("/api/visit", (VisitRequest visit, ClaimsPrincipal user, VisitStats 
 static bool IsStatsOwner(ClaimsPrincipal user, IConfiguration config, out string? spotifyId)
 {
     spotifyId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
-    var owners = (config["Stats:OwnerSpotifyIds"] ?? "")
-        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    return spotifyId != null && owners.Contains(spotifyId);
+    return spotifyId != null && VisitStats.OwnerIds(config).Contains(spotifyId);
 }
 
 app.MapGet("/api/stats/access", (ClaimsPrincipal user, IConfiguration config) =>

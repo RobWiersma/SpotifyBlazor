@@ -9,20 +9,29 @@ using SpotifyBlazor.Shared.Models;
 // What's stored per visitor and day: a random id the browser made up (no IP address), the mode,
 // page views, first and last seen, and for signed-in users the Spotify id and display name
 // taken from our own login token (so they can't be faked).
+//
+// The owner's own visits aren't counted: signed in as an account in Stats:OwnerSpotifyIds, or
+// from a browser the owner has signed in on (remembered in a second small file), even signed out.
 public class VisitStats : IHostedService, IDisposable
 {
     private const int KeepDays = 90;
 
+    private const int MaxOwnerBrowsers = 100;
+
     private readonly string _file;
+    private readonly string _ownerFile;
+    private readonly HashSet<string> _owners;
+    private readonly HashSet<string> _ownerBrowsers = new();   // visitor ids the owner signed in on
     private readonly ILogger<VisitStats> _logger;
     private readonly object _lock = new();
     private readonly Dictionary<string, DayStats> _days = new();   // "yyyy-MM-dd" (UTC) → that day
     private Timer? _saveTimer;
     private bool _dirty;
 
-    public VisitStats(IWebHostEnvironment env, ILogger<VisitStats> logger)
+    public VisitStats(IWebHostEnvironment env, ILogger<VisitStats> logger, IConfiguration? config = null)
     {
         _logger = logger;
+        _owners = OwnerIds(config).ToHashSet();
 
         // On Azure App Service, %HOME% (D:\home) survives restarts and deploys, and
         // wwwroot may be read-only (run from package); locally use App_Data
@@ -32,7 +41,14 @@ public class VisitStats : IHostedService, IDisposable
             : Path.Combine(env.ContentRootPath, "App_Data");
 
         _file = Path.Combine(dir, "visit-stats.json");
+        _ownerFile = Path.Combine(dir, "owner-browsers.json");
     }
+
+    // The Spotify accounts in Stats:OwnerSpotifyIds (comma-separated): they see the stats, and
+    // their own visits aren't counted
+    public static IEnumerable<string> OwnerIds(IConfiguration? config) =>
+        (config?["Stats:OwnerSpotifyIds"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     // ---------------------------------------------------------
     // Recording
@@ -54,6 +70,21 @@ public class VisitStats : IHostedService, IDisposable
 
         lock (_lock)
         {
+            // The owner's visits don't count. A browser they sign in on stays left out when
+            // signed out or in demo mode too, and what it counted earlier is taken back out.
+            if (spotifyId != null && _owners.Contains(spotifyId))
+            {
+                if (_ownerBrowsers.Count < MaxOwnerBrowsers && _ownerBrowsers.Add(visit.VisitorId))
+                {
+                    ForgetOwnerVisits();
+                    _dirty = true;
+                }
+                return;
+            }
+
+            if (_ownerBrowsers.Contains(visit.VisitorId))
+                return;
+
             if (!_days.TryGetValue(key, out var day))
                 _days[key] = day = new DayStats();
 
@@ -81,6 +112,16 @@ public class VisitStats : IHostedService, IDisposable
 
             _dirty = true;
         }
+    }
+
+    // Removes visitors that were the owner from every day kept (call inside the lock). Their
+    // page counts can't be told apart from everyone else's, so those stay.
+    private void ForgetOwnerVisits()
+    {
+        foreach (var day in _days.Values)
+            foreach (var (id, v) in day.Visitors.ToList())
+                if (_ownerBrowsers.Contains(id) || (v.SpotifyId != null && _owners.Contains(v.SpotifyId)))
+                    day.Visitors.Remove(id);
     }
 
     // "/album/4aawyAB9vmqN3uQ7FjRGTy?x=1" → "/album/{id}", so pages group and ids aren't kept
@@ -183,6 +224,19 @@ public class VisitStats : IHostedService, IDisposable
                 if (saved != null)
                     foreach (var (k, v) in saved) _days[k] = v;
             }
+
+            if (File.Exists(_ownerFile))
+                _ownerBrowsers.UnionWith(JsonSerializer.Deserialize<string[]>(File.ReadAllText(_ownerFile)) ?? []);
+
+            // Browsers the owner signed in on before this was added are in the saved days
+            foreach (var day in _days.Values)
+                foreach (var (id, v) in day.Visitors)
+                    if (v.SpotifyId != null && _owners.Contains(v.SpotifyId) && _ownerBrowsers.Count < MaxOwnerBrowsers)
+                        _ownerBrowsers.Add(id);
+
+            var before = _days.Values.Sum(d => d.Visitors.Count);
+            ForgetOwnerVisits();
+            _dirty = _days.Values.Sum(d => d.Visitors.Count) != before;
         }
         catch (Exception ex)
         {
@@ -202,7 +256,7 @@ public class VisitStats : IHostedService, IDisposable
 
     private void Save()
     {
-        string json;
+        string json, ownerJson;
 
         lock (_lock)
         {
@@ -214,6 +268,7 @@ public class VisitStats : IHostedService, IDisposable
                 _days.Remove(old);
 
             json = JsonSerializer.Serialize(_days);
+            ownerJson = JsonSerializer.Serialize(_ownerBrowsers);
             _dirty = false;
         }
 
@@ -223,6 +278,8 @@ public class VisitStats : IHostedService, IDisposable
             var temp = _file + ".tmp";
             File.WriteAllText(temp, json);
             File.Move(temp, _file, overwrite: true);   // never leaves a half-written file
+            File.WriteAllText(temp, ownerJson);
+            File.Move(temp, _ownerFile, overwrite: true);
         }
         catch (Exception ex)
         {

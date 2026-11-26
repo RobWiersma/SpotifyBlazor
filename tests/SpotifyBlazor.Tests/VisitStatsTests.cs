@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using SpotifyBlazor.Shared.Models;
@@ -9,7 +10,10 @@ namespace SpotifyBlazor.Tests;
 // made-up ids from growing the stats file. Only in memory: nothing here saves to disk.
 public class VisitStatsTests
 {
-    private readonly VisitStats _stats = new(new TestEnvironment(), NullLogger<VisitStats>.Instance);
+    private readonly VisitStats _stats = new(new TestEnvironment(), NullLogger<VisitStats>.Instance,
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Stats:OwnerSpotifyIds"] = "owner, owner2" })
+            .Build());
 
     private void Visit(string visitor, string mode = VisitModes.SignedOut, string? path = "/",
         string? spotifyId = null, string? spotifyName = null) =>
@@ -123,6 +127,32 @@ public class VisitStatsTests
         Assert.Equal(30, daily.Count);
         Assert.Equal(DateTime.UtcNow.ToString("yyyy-MM-dd"), daily[^1].Date);
         Assert.Equal(1, daily[^1].Demo);
+    }
+
+    [Fact]
+    public void The_owners_signed_in_visits_dont_count()
+    {
+        Visit("a", spotifyId: "owner", spotifyName: "Me");
+        Visit("b", spotifyId: "owner2");
+
+        var summary = _stats.Summarize();
+        Assert.Equal(0, summary.Today.Visitors);
+        Assert.Empty(summary.SignedInUsers);
+        Assert.Empty(summary.TopPages);
+    }
+
+    [Fact]
+    public void A_browser_the_owner_signed_in_on_stays_left_out_when_signed_out()
+    {
+        Visit("a", mode: VisitModes.SignedOut);              // before signing in: counted at first...
+        Visit("a", spotifyId: "owner");                      // ...then taken back out
+        Visit("a", mode: VisitModes.Demo);                   // and not counted afterwards
+        Visit("b", mode: VisitModes.SignedOut);              // someone else still counts
+
+        var today = _stats.Summarize().Today;
+        Assert.Equal(1, today.Visitors);
+        Assert.Equal(1, today.SignedOut);
+        Assert.Equal(0, today.Demo);
     }
 
     private class TestEnvironment : IWebHostEnvironment

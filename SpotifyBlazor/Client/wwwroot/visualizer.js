@@ -612,6 +612,10 @@ function drawWave(fs) {
     ctx.globalAlpha = 1;
 }
 
+// Downward pull on the sparks, in CSS pixels per frame per frame (at 60 fps). Higher falls
+// faster; 0 lets them drift straight out.
+const PARTICLE_GRAVITY = 0.14;
+
 // Sparks thrown out from the cover's edge: a burst on each beat, a big one as a chorus
 // starts, and a trickle in between that follows the bass
 function drawParticles(fs) {
@@ -646,8 +650,10 @@ function drawParticles(fs) {
     ctx.globalCompositeOperation = "lighter";
     ctx.shadowBlur = 0;
     const drag = Math.pow(0.985, frames);
+    const gravity = PARTICLE_GRAVITY * dpr * frames;
 
     particles = particles.filter(p => {
+        p.vy += gravity;   // sparks thrown upwards arc over and fall like real ones
         p.x += p.vx * frames;
         p.y += p.vy * frames;
         p.vx *= drag;

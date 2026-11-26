@@ -9,7 +9,8 @@
 //
 // Styles: bars along the bottom, a ring around the album cover, flowing waves,
 // particles bursting from the cover, a tunnel of squares flying outwards, bars
-// mirrored top and bottom, or the cover itself shattering on the beat.
+// mirrored top and bottom, the cover itself shattering on the beat, or a warping
+// video-feedback swirl.
 // The synced lyrics' timestamps give the one piece of real song structure
 // available: lines that repeat are treated as the chorus, and the visualizer gets
 // bigger and brighter there, with a flash as each chorus begins.
@@ -17,7 +18,7 @@
 // Spotify green, violet, hot pink
 const FALLBACK = [[29, 185, 84], [127, 90, 240], [255, 64, 160]];
 
-const STYLES = ["bars", "ring", "wave", "particles", "tunnel", "mirror", "shatter"];
+const STYLES = ["bars", "ring", "wave", "particles", "tunnel", "mirror", "shatter", "warp"];
 
 let canvas, ctx, resizeObserver, frame;
 let playing = false;
@@ -46,6 +47,8 @@ let tunnelRings = [];
 let shards = [];
 let shatterPush = 0;
 let coverImg;               // the cover, for the shatter style
+let warpBuffers = [];       // two offscreen canvases the warp style draws back and forth between
+let warpSpin = 0;           // warp's current twist, nudged on each beat
 
 // Song position, counted on from Spotify's last report
 let positionMs = 0;
@@ -133,6 +136,7 @@ export function setStyles(names) {
     // Clear what turned-off styles left behind
     if (!styles.has("particles")) particles = [];
     if (!styles.has("tunnel")) tunnelRings = [];
+    if (!styles.has("warp")) warpBuffers = [];
     setCover(null);
 }
 
@@ -361,6 +365,7 @@ function draw(now) {
     // Every selected style, back to front. Mirror already includes the bottom bars, so
     // with both picked the bars are only drawn (and moved) once.
     const draws = {
+        warp: drawWarp,
         tunnel: drawTunnel,
         wave: drawWave,
         particles: drawParticles,
@@ -610,6 +615,93 @@ function drawWave(fs) {
         }
     }
     ctx.globalAlpha = 1;
+}
+
+// Video feedback, in the spirit of the classic Winamp-era visualizers: each frame redraws
+// the last one slightly zoomed, twisted and hue-shifted around the cover, fading as it
+// goes, then draws a fresh waveform ring on top. The old frames pour outwards as glowing
+// trails. Drawn at half resolution, which keeps it fast and softens the trails.
+function drawWarp(fs) {
+    const { dpr, dt, t, calm, cover, palette } = fs;
+    const frames = dt * 60;
+    const scale = 0.5;
+    const w = Math.max(1, Math.round(fs.w * scale));
+    const h = Math.max(1, Math.round(fs.h * scale));
+
+    if (warpBuffers.length !== 2 || warpBuffers[0].width !== w || warpBuffers[0].height !== h) {
+        warpBuffers = [0, 1].map(() => {
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            return c;
+        });
+    }
+
+    const [prev, next] = warpBuffers;
+    const g = next.getContext("2d");
+    const cx = cover.cx * scale, cy = cover.cy * scale;
+
+    // The twist drifts slowly and gets a kick on each beat, so the swirl changes direction
+    if (fs.onBeat && !calm) warpSpin += (Math.random() < 0.5 ? -1 : 1) * 0.01 * (1 + chorus);
+    warpSpin *= Math.pow(0.97, frames);
+    const twist = (0.003 * Math.sin(t * 0.23) + warpSpin) * frames * (calm ? 0.3 : 1);
+    const zoom = 1 + (0.012 + 0.05 * fs.bass * level + 0.02 * chorus) * frames * (calm ? 0.3 : 1);
+
+    // 1. The last frame, zoomed and twisted around the cover, a little faded and hue-shifted
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = "source-over";
+    g.clearRect(0, 0, w, h);
+    g.globalAlpha = Math.pow(playing ? 0.94 : 0.85, frames);
+    g.filter = `hue-rotate(${(2 + 4 * chorus) * frames}deg)`;
+    g.translate(cx, cy);
+    g.rotate(twist);
+    g.scale(zoom, zoom);
+    g.translate(-cx, -cy);
+    g.drawImage(prev, 0, 0);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.filter = "none";
+
+    // 2. A fresh waveform ring around the cover, shaped by the music
+    if (level > 0.02) {
+        const base = cover.size * scale * 0.62;
+        const amp = cover.size * scale * 0.35 * (1 + 0.5 * chorus + 0.6 * flash);
+        const points = 120;
+        const c = barColor(palette, (huePhase * 0.3) % 1, 0.65);
+
+        g.globalAlpha = level;
+        g.globalCompositeOperation = "lighter";
+        g.lineWidth = (1.5 + 2 * fs.bass) * dpr * scale * 2;
+        g.strokeStyle = hsla(c.hue, c.sat, Math.min(0.85, c.light + 0.15), 0.9);
+        g.beginPath();
+        for (let i = 0; i <= points; i++) {
+            const a = i / points * 2 * Math.PI;
+            const d = Math.abs(Math.cos(a));   // treble at the top and bottom, bass at the sides
+            const wobble = Math.sin(a * 6 + t * 3) * 0.15;
+            const r = base + amp * (energyAt(d) + wobble * fs.bass);
+            const x = cx + Math.cos(a - Math.PI / 2) * r;
+            const y = cy + Math.sin(a - Math.PI / 2) * r;
+            if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        }
+        g.closePath();
+        g.stroke();
+
+        // A bright pulse on the beat seeds a new wave of color
+        if (fs.onBeat && !calm) {
+            const p = barColor(palette, Math.random(), 0.7);
+            g.fillStyle = hsla(p.hue, p.sat, p.light, 0.25 + 0.25 * chorus);
+            g.beginPath();
+            g.arc(cx, cy, base * 1.1, 0, 2 * Math.PI);
+            g.fill();
+        }
+    }
+
+    // 3. Onto the page, scaled back up; then swap, so this frame feeds the next
+    ctx.globalCompositeOperation = "lighter";
+    ctx.shadowBlur = 0;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(next, 0, 0, w, h, 0, 0, w / scale, h / scale);
+    ctx.globalCompositeOperation = "source-over";
+    warpBuffers = [next, prev];
 }
 
 // Downward pull on the sparks, in CSS pixels per frame per frame (at 60 fps). Higher falls

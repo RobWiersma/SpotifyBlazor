@@ -29,7 +29,7 @@ No Spotify account? Click **Try the demo** on the site: a built-in library of fr
 
 <p align="center">
   <img src="docs/screenshots/visualizer-mic.gif" alt="Live recording of Now Playing for Ace Frehley's New York Groove with 🎙️ Mic on: the Ring around the cover and the bars along the bottom jump in time with the song as the microphone hears it from the speakers" width="100%" />
-  <br/><sub><b>🌈 Winamp style Visualizers</b> — seven styles in the album art's colors, mixed and matched, hitting harder in the chorus, or reacting to your mic with 🎙️ Mic (recorded live here: the song playing out loud, picked up by a webcam mic, with Ring + Bars reacting)</sub>
+  <br/><sub><b>🌈 Winamp style Visualizers</b> — eight styles in the album art's colors, mixed and matched, hitting harder in the chorus, or reacting to your mic with 🎙️ Mic (recorded live here: the song playing out loud, picked up by a webcam mic, with Ring + Bars reacting)</sub>
 </p>
 
 <table>
@@ -103,7 +103,7 @@ Demo music by Kevin MacLeod ([incompetech.com](https://incompetech.com)), licens
 - Device picker to hand playback between phone, desktop, speakers and browser
 - Synced lyrics on the Now Playing screen (timed lyrics from [LRCLIB](https://lrclib.net))
 - Music videos: 🎬 Video finds the song's video on YouTube and plays it in the app
-- 🌈 Winamp style Visualizers in the album art's colors, with seven styles to mix and match under 🎨 Styles (several can be on at once): Bars, a Ring around the pulsing cover, flowing Waves, Particles bursting from the cover, a Tunnel of squares flying outwards, Mirror bars top and bottom, and Shatter, which breaks the cover into tiles on the beat. Animated, or with 🎙️ Mic reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser). Repeated lines in the synced lyrics mark the chorus, where it gets bigger and brighter
+- 🌈 Winamp style Visualizers in the album art's colors, with eight styles to mix and match under 🎨 Styles (several can be on at once): Bars, a Ring around the pulsing cover, flowing Waves, Particles bursting from the cover, a Tunnel of squares flying outwards, Mirror bars top and bottom, Shatter, which breaks the cover into tiles on the beat, and Warp, a video-feedback swirl where each frame is redrawn zoomed, twisted and hue-shifted so the waveform pours outward in glowing trails. Animated, or with 🎙️ Mic reacting to what your microphone hears (Spotify's own audio can't be analyzed in the browser). Repeated lines in the synced lyrics mark the chorus, where it gets bigger and brighter
 
 </td>
 <td width="50%" valign="top">
